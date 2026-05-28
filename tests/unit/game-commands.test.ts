@@ -19,6 +19,7 @@ function fakeCtx(over: Partial<GameActionContext> = {}): GameActionContext {
     reward: vi.fn(),
     cue: vi.fn(),
     performTrick: vi.fn(),
+    teach: vi.fn(),
     ...over,
   };
 }
@@ -26,10 +27,25 @@ function fakeCtx(over: Partial<GameActionContext> = {}): GameActionContext {
 describe('game command repertoire', () => {
   it('registers the six static commands across care/play/train', () => {
     const reg = createGameRegistry();
-    expect(reg.all().map((c) => c.id)).toEqual(['pet', 'feed', 'throw', 'clap', 'whistle', 'reward']);
+    expect(reg.all().map((c) => c.id)).toEqual([
+      'pet',
+      'feed',
+      'throw',
+      'clap',
+      'whistle',
+      'reward',
+      'teach',
+    ]);
     expect(reg.group('care').map((c) => c.id)).toEqual(['pet', 'feed']);
     expect(reg.group('play').map((c) => c.id)).toEqual(['throw']);
-    expect(reg.group('train').map((c) => c.id)).toEqual(['clap', 'whistle', 'reward']);
+    expect(reg.group('train').map((c) => c.id)).toEqual(['clap', 'whistle', 'reward', 'teach']);
+  });
+
+  it('teach opens the composer via the context', () => {
+    const reg = createGameRegistry();
+    const ctx = fakeCtx();
+    reg.execute('teach', ctx);
+    expect(ctx.teach).toHaveBeenCalledOnce();
   });
 
   it('pet is only available near the dog and grants love', () => {

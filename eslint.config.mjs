@@ -41,6 +41,7 @@ export default [
         HTMLCanvasElement: 'readonly',
         HTMLDivElement: 'readonly',
         HTMLButtonElement: 'readonly',
+        HTMLInputElement: 'readonly',
         HTMLSpanElement: 'readonly',
         HTMLImageElement: 'readonly',
         Element: 'readonly',

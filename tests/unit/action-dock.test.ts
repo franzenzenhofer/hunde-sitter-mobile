@@ -7,7 +7,10 @@ type Harness = {
   host: HTMLDivElement;
   ctx: GameActionContext;
   state: { hasBall: boolean; hasTreat: boolean; ballInPlay: boolean; dogNear: boolean; busy: boolean };
-  spies: Record<'pet' | 'feed' | 'throwBall' | 'reward' | 'cue' | 'performTrick', ReturnType<typeof vi.fn>>;
+  spies: Record<
+    'pet' | 'feed' | 'throwBall' | 'reward' | 'cue' | 'performTrick' | 'teach',
+    ReturnType<typeof vi.fn>
+  >;
   clock: { t: number };
   tricks: Array<{ id: string; name: string }>;
 };
@@ -23,6 +26,7 @@ function setup(overrides: Partial<DockDeps> = {}): { harness: Harness; deps: Doc
     reward: vi.fn(),
     cue: vi.fn(),
     performTrick: vi.fn(),
+    teach: vi.fn(),
   };
   const ctx: GameActionContext = {
     get hasBall() {
@@ -107,7 +111,7 @@ describe('ActionDock — structure', () => {
     const ids = [...harness.host.querySelectorAll('.dock-chip')].map((c) =>
       c.getAttribute('data-cmd'),
     );
-    expect(ids).toEqual(['pet', 'feed', 'throw', 'clap', 'whistle', 'reward']);
+    expect(ids).toEqual(['pet', 'feed', 'throw', 'clap', 'whistle', 'reward', 'teach']);
   });
 });
 
