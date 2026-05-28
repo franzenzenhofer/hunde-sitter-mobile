@@ -23,6 +23,9 @@ import type { Program, Trick } from '../training/types';
 export type TrickComposerDeps = {
   onSave: (trick: Trick) => void;
   onTest?: (program: Program) => void;
+  /** Player-authored tricks currently known, for the manage list. */
+  playerTricks?: () => Array<{ id: string; name: string }>;
+  onDelete?: (id: string) => void;
 };
 
 export type TrickComposer = {
@@ -58,6 +61,9 @@ export function createTrickComposer(host: HTMLElement, deps: TrickComposerDeps):
   const title = document.createElement('div');
   title.className = 'cmp-title';
   title.textContent = 'Teach Bello a trick';
+
+  const manageWrap = document.createElement('div');
+  manageWrap.className = 'cmp-manage';
 
   const nameInput = document.createElement('input');
   nameInput.type = 'text';
@@ -136,7 +142,7 @@ export function createTrickComposer(host: HTMLElement, deps: TrickComposerDeps):
   const saveBtn = makeFooterBtn('Save', 'cmp-save', save);
   footer.appendChild(saveBtn);
 
-  card.append(title, nameInput, stepsWrap, paletteWrap, repeatRow, cueRow, error, footer);
+  card.append(title, manageWrap, nameInput, stepsWrap, paletteWrap, repeatRow, cueRow, error, footer);
   el.append(scrim, card);
   host.appendChild(el);
 
@@ -180,6 +186,40 @@ export function createTrickComposer(host: HTMLElement, deps: TrickComposerDeps):
     }
     error.textContent = '';
     deps.onTest?.(buildProgram(draft));
+  }
+
+  function renderManage(): void {
+    manageWrap.replaceChildren();
+    const tricks = deps.playerTricks?.() ?? [];
+    if (tricks.length === 0) {
+      manageWrap.style.display = 'none';
+      return;
+    }
+    manageWrap.style.display = '';
+    const lbl = document.createElement('div');
+    lbl.className = 'cmp-manage-lbl';
+    lbl.textContent = 'Your tricks';
+    manageWrap.appendChild(lbl);
+    for (const t of tricks) {
+      const row = document.createElement('div');
+      row.className = 'cmp-manage-row';
+      row.dataset.trick = t.id;
+      const name = document.createElement('span');
+      name.className = 'cmp-manage-name';
+      name.textContent = t.name;
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'cmp-del';
+      del.dataset.del = t.id;
+      del.textContent = 'Forget ✕';
+      del.setAttribute('aria-label', `Delete ${t.name}`);
+      del.addEventListener('click', () => {
+        deps.onDelete?.(t.id);
+        renderManage();
+      });
+      row.append(name, del);
+      manageWrap.appendChild(row);
+    }
   }
 
   function render(): void {
@@ -254,6 +294,7 @@ export function createTrickComposer(host: HTMLElement, deps: TrickComposerDeps):
       draft = emptyDraft();
       nameInput.value = '';
       error.textContent = '';
+      renderManage();
       render();
       el.classList.add('is-open');
       nameInput.focus();
@@ -311,6 +352,15 @@ function injectComposerStyle(): void {
 }
 #composer.is-open .cmp-card { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 .cmp-title { font: 800 18px -apple-system, sans-serif; margin-bottom: 12px; }
+.cmp-manage { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #eee4d6; }
+.cmp-manage-lbl { font: 800 11px -apple-system, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: #6a6a72; margin-bottom: 6px; }
+.cmp-manage-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; }
+.cmp-manage-name { font: 700 13px -apple-system, sans-serif; }
+.cmp-del {
+  border: none; border-radius: 8px; cursor: pointer; padding: 5px 9px;
+  background: #f6e2dc; color: #b34a32; font: 700 11px -apple-system, sans-serif;
+}
+.cmp-del:active { transform: scale(0.94); }
 .cmp-name {
   width: 100%; box-sizing: border-box; padding: 10px 12px; margin-bottom: 12px;
   border: 2px solid #e3ddd2; border-radius: 12px; font: 600 15px -apple-system, sans-serif;

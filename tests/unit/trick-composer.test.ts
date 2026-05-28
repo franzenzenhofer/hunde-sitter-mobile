@@ -146,3 +146,38 @@ describe('TrickComposer — authoring', () => {
     expect(host.querySelector('#composer')!.classList.contains('is-open')).toBe(false);
   });
 });
+
+describe('TrickComposer — manage', () => {
+  function mountWithTricks(initial: Array<{ id: string; name: string }>) {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const list = [...initial];
+    const onSave = vi.fn<(t: Trick) => void>();
+    const onDelete = vi.fn<(id: string) => void>((id: string) => {
+      const i = list.findIndex((t) => t.id === id);
+      if (i >= 0) list.splice(i, 1);
+    });
+    const composer = createTrickComposer(host, { onSave, onDelete, playerTricks: () => list });
+    composer.open();
+    return { host, onDelete, list, composer };
+  }
+
+  it('hides the manage section when there are no player tricks', () => {
+    const { host } = mountWithTricks([]);
+    expect((host.querySelector('.cmp-manage') as HTMLElement).style.display).toBe('none');
+  });
+
+  it('lists player tricks and deletes one, refreshing the list', () => {
+    const { host, onDelete } = mountWithTricks([
+      { id: 'a', name: 'Dance' },
+      { id: 'b', name: 'Beg' },
+    ]);
+    expect([...host.querySelectorAll('.cmp-manage-name')].map((n) => n.textContent)).toEqual([
+      'Dance',
+      'Beg',
+    ]);
+    host.querySelector<HTMLButtonElement>('[data-del="a"]')!.click();
+    expect(onDelete).toHaveBeenCalledWith('a');
+    expect([...host.querySelectorAll('.cmp-manage-name')].map((n) => n.textContent)).toEqual(['Beg']);
+  });
+});

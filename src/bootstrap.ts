@@ -220,6 +220,15 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
         },
       );
     },
+    playerTricks: () =>
+      Object.values(engine.state.tricks)
+        .filter((t) => t.authoredBy === 'player')
+        .map((t) => ({ id: t.id, name: t.name })),
+    onDelete: (id) => {
+      delete engine.state.tricks[id];
+      dock.refreshTricks();
+      vocabPanel.refresh();
+    },
   });
 
   let completedCount = 0;
