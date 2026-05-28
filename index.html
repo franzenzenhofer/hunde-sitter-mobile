@@ -84,27 +84,7 @@
         background: rgba(255, 255, 255, 0.78);
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
       }
-      #action {
-        position: absolute;
-        right: calc(24px + env(safe-area-inset-right));
-        bottom: calc(28px + env(safe-area-inset-bottom));
-        width: 96px;
-        height: 96px;
-        border-radius: 50%;
-        background: linear-gradient(180deg, #ffd86b, #ff9a5a);
-        border: 3px solid #fff;
-        color: #2a2a2a;
-        font: 800 18px -apple-system, BlinkMacSystemFont, sans-serif;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
-        touch-action: manipulation;
-        cursor: pointer;
-      }
-      #action:active {
-        transform: translateY(2px);
-        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.22);
-      }
+      /* The action button + command dock own their styles (src/ui/action-dock.ts). */
       #fps {
         position: absolute;
         top: calc(12px + env(safe-area-inset-top));

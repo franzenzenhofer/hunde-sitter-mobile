@@ -42,7 +42,8 @@ function buildInstructions(): HTMLDivElement {
   const lines: Array<[string, string]> = [
     ['Drag your left thumb', ' to walk.'],
     ['Drag the right side', ' to look around.'],
-    ['Tap the action button', ' to pet, feed, or throw the ball.'],
+    ['Tap the big button', ' for the smart action — pet, feed, or throw.'],
+    ['Tap 🐾', ' to open commands: clap, whistle, ask for tricks, and reward Bello.'],
   ];
   for (const [bold, rest] of lines) {
     const b = document.createElement('b');
@@ -51,7 +52,9 @@ function buildInstructions(): HTMLDivElement {
     el.appendChild(document.createTextNode(rest));
     el.appendChild(document.createElement('br'));
   }
-  el.appendChild(document.createTextNode('Explore forever, complete quests, keep Bello happy.'));
+  el.appendChild(
+    document.createTextNode('Cue → trick → reward, and Bello learns the cue. Keep him happy!'),
+  );
   return el;
 }
 
