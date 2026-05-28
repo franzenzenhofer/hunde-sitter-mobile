@@ -56,6 +56,9 @@ export function createActionDock(host: HTMLElement, deps: DockDeps): ActionDock 
 
   const el = document.createElement('div');
   el.id = 'dock';
+  // Keep dock interactions (taps, tray scrolling) from reaching the window-level
+  // camera-drag / joystick listeners, so using the UI never moves the world.
+  el.addEventListener('pointerdown', (e) => e.stopPropagation());
 
   // Tap-anywhere scrim that closes the tray (kept under the tray + buttons).
   const scrim = document.createElement('div');
@@ -132,6 +135,7 @@ export function createActionDock(host: HTMLElement, deps: DockDeps): ActionDock 
   toggle.setAttribute('aria-label', 'Open command tray');
   toggle.setAttribute('aria-expanded', 'false');
   toggle.textContent = '🐾';
+  if (!dockSeen()) toggle.classList.add('hint-pulse');
   toggle.addEventListener('click', () => (open ? api.close() : api.open()));
 
   const primary = document.createElement('button');
@@ -203,6 +207,8 @@ export function createActionDock(host: HTMLElement, deps: DockDeps): ActionDock 
     open() {
       open = true;
       el.classList.add('is-open');
+      toggle.classList.remove('hint-pulse');
+      markDockSeen();
       toggle.textContent = '✕';
       toggle.setAttribute('aria-label', 'Close command tray');
       toggle.setAttribute('aria-expanded', 'true');
@@ -221,6 +227,22 @@ export function createActionDock(host: HTMLElement, deps: DockDeps): ActionDock 
   };
 
   return api;
+}
+
+const DOCK_SEEN_KEY = 'hs:dock-seen';
+function dockSeen(): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem(DOCK_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+function markDockSeen(): void {
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(DOCK_SEEN_KEY, '1');
+  } catch {
+    /* storage unavailable — ignore */
+  }
 }
 
 function vibrate(ms: number): void {
@@ -268,6 +290,12 @@ function injectStyle(): void {
 }
 #dock-toggle:active { transform: scale(0.92); }
 #dock.is-open #dock-toggle { background: #fff; transform: rotate(90deg); }
+#dock-toggle.hint-pulse { animation: dock-hint 1.7s ease-in-out infinite; }
+@keyframes dock-hint {
+  0%   { box-shadow: 0 6px 16px rgba(0,0,0,0.22), 0 0 0 0 rgba(255,154,90,0.55); }
+  70%  { box-shadow: 0 6px 16px rgba(0,0,0,0.22), 0 0 0 16px rgba(255,154,90,0); }
+  100% { box-shadow: 0 6px 16px rgba(0,0,0,0.22), 0 0 0 0 rgba(255,154,90,0); }
+}
 
 #action {
   position: static; inset: auto;

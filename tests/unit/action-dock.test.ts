@@ -82,6 +82,25 @@ describe('ActionDock — structure', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
   });
 
+  it('stops pointer events from reaching the world (no camera spin on tap/scroll)', () => {
+    const { harness, deps } = setup();
+    createActionDock(harness.host, deps);
+    const windowSpy = vi.fn();
+    window.addEventListener('pointerdown', windowSpy);
+    try {
+      harness.host
+        .querySelector('#dock-toggle')!
+        .dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      expect(windowSpy).not.toHaveBeenCalled();
+
+      // sanity: an event outside the dock still reaches the window
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      expect(windowSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener('pointerdown', windowSpy);
+    }
+  });
+
   it('renders every static command as a chip in its group', () => {
     const { harness, deps } = setup();
     createActionDock(harness.host, deps);
@@ -167,6 +186,28 @@ describe('ActionDock — behaviour', () => {
     expect(sit.querySelector('.dock-lbl')!.textContent).toBe('Sit');
     sit.click();
     expect(harness.spies.performTrick).toHaveBeenCalledWith('sit');
+  });
+
+  it('pulses the toggle for discovery until first opened, then remembers', () => {
+    localStorage.removeItem('hs:dock-seen');
+    const first = setup();
+    const dock = createActionDock(first.harness.host, first.deps);
+    const toggle = first.harness.host.querySelector<HTMLButtonElement>('#dock-toggle')!;
+    expect(toggle.classList.contains('hint-pulse')).toBe(true);
+
+    dock.open();
+    expect(toggle.classList.contains('hint-pulse')).toBe(false);
+    expect(localStorage.getItem('hs:dock-seen')).toBe('1');
+
+    // Fresh document (single dock → no duplicate-id lookup ambiguity in jsdom).
+    document.body.replaceChildren();
+    const second = setup();
+    createActionDock(second.harness.host, second.deps);
+    expect(
+      second.harness.host.querySelector<HTMLButtonElement>('#dock-toggle')!.classList.contains(
+        'hint-pulse',
+      ),
+    ).toBe(false);
   });
 
   it('blocks trick chips while the dog is busy', () => {
