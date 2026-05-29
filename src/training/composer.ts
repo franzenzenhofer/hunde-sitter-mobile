@@ -8,6 +8,7 @@
  * built-in one. This file is pure data → no DOM, fully unit-tested.
  */
 import type { Program, Trick } from './types';
+import { newTrick } from './trick';
 
 export type StepArgSpec = {
   key: string;
@@ -115,16 +116,11 @@ export function buildProgram(draft: TrickDraft): Program {
 
 export function draftToTrick(draft: TrickDraft, id?: string): Trick {
   const tid = id ?? `t-${Date.now()}-${Math.floor(Math.random() * 1e6).toString(36)}`;
-  return {
+  return newTrick({
     id: tid,
     name: draft.name.trim(),
     ...(draft.cueGestureId ? { cueGestureId: draft.cueGestureId } : {}),
     program: buildProgram(draft),
-    mastery: 0,
-    attempts: 0,
-    successes: 0,
-    reinforcements: 0,
     authoredBy: 'player',
-    createdAt: Date.now(),
-  };
+  });
 }

@@ -19,6 +19,7 @@ import {
   type TrickDraft,
 } from '../training/composer';
 import type { Program, Trick } from '../training/types';
+import { button, injectStyleOnce } from './dom';
 
 export type TrickComposerDeps = {
   onSave: (trick: Trick) => void;
@@ -42,7 +43,7 @@ const CUES: Array<{ id: 'none' | 'clap' | 'whistle'; label: string }> = [
 ];
 
 export function createTrickComposer(host: HTMLElement, deps: TrickComposerDeps): TrickComposer {
-  injectComposerStyle();
+  injectStyleOnce('composer-style', COMPOSER_CSS);
   let draft: TrickDraft = emptyDraft();
 
   const el = document.createElement('div');
@@ -81,19 +82,18 @@ export function createTrickComposer(host: HTMLElement, deps: TrickComposerDeps):
   const paletteWrap = document.createElement('div');
   paletteWrap.className = 'cmp-palette';
   for (const entry of STEP_PALETTE) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'cmp-add';
+    const b = button({
+      className: 'cmp-add',
+      ariaLabel: `Add ${entry.name}`,
+      onClick: () => addStep(entry.nodeId),
+    });
     b.dataset.add = entry.nodeId;
-    b.setAttribute('aria-label', `Add ${entry.name}`);
-    b.innerHTML = '';
     const ico = document.createElement('span');
     ico.textContent = entry.icon;
     const lbl = document.createElement('span');
     lbl.className = 'cmp-add-lbl';
     lbl.textContent = entry.name;
     b.append(ico, lbl);
-    b.addEventListener('click', () => addStep(entry.nodeId));
     paletteWrap.appendChild(b);
   }
 
@@ -118,12 +118,8 @@ export function createTrickComposer(host: HTMLElement, deps: TrickComposerDeps):
   cueRow.appendChild(cueLbl);
   const cueBtns = new Map<string, HTMLButtonElement>();
   for (const c of CUES) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'cmp-cue';
+    const b = button({ className: 'cmp-cue', text: c.label, onClick: () => setCue(c.id) });
     b.dataset.cue = c.id;
-    b.textContent = c.label;
-    b.addEventListener('click', () => setCue(c.id));
     cueBtns.set(c.id, b);
     cueRow.appendChild(b);
   }
@@ -207,16 +203,16 @@ export function createTrickComposer(host: HTMLElement, deps: TrickComposerDeps):
       const name = document.createElement('span');
       name.className = 'cmp-manage-name';
       name.textContent = t.name;
-      const del = document.createElement('button');
-      del.type = 'button';
-      del.className = 'cmp-del';
-      del.dataset.del = t.id;
-      del.textContent = 'Forget ✕';
-      del.setAttribute('aria-label', `Delete ${t.name}`);
-      del.addEventListener('click', () => {
-        deps.onDelete?.(t.id);
-        renderManage();
+      const del = button({
+        className: 'cmp-del',
+        text: 'Forget ✕',
+        ariaLabel: `Delete ${t.name}`,
+        onClick: () => {
+          deps.onDelete?.(t.id);
+          renderManage();
+        },
       });
+      del.dataset.del = t.id;
       row.append(name, del);
       manageWrap.appendChild(row);
     }
@@ -270,12 +266,12 @@ export function createTrickComposer(host: HTMLElement, deps: TrickComposerDeps):
         row.append(slider, argVal);
       }
 
-      const rm = document.createElement('button');
-      rm.type = 'button';
-      rm.className = 'cmp-step-rm';
-      rm.textContent = '✕';
-      rm.setAttribute('aria-label', `Remove step ${i + 1}`);
-      rm.addEventListener('click', () => removeStep(i));
+      const rm = button({
+        className: 'cmp-step-rm',
+        text: '✕',
+        ariaLabel: `Remove step ${i + 1}`,
+        onClick: () => removeStep(i),
+      });
       row.appendChild(rm);
 
       stepsWrap.appendChild(row);
@@ -311,29 +307,14 @@ export function createTrickComposer(host: HTMLElement, deps: TrickComposerDeps):
 }
 
 function stepperBtn(text: string, label: string, onClick: () => void): HTMLButtonElement {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'cmp-step-btn';
-  b.textContent = text;
-  b.setAttribute('aria-label', label);
-  b.addEventListener('click', onClick);
-  return b;
+  return button({ className: 'cmp-step-btn', text, ariaLabel: label, onClick });
 }
 
 function makeFooterBtn(text: string, cls: string, onClick: () => void): HTMLButtonElement {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = `cmp-btn ${cls}`;
-  b.textContent = text;
-  b.addEventListener('click', onClick);
-  return b;
+  return button({ className: `cmp-btn ${cls}`, text, onClick });
 }
 
-let composerStyleInjected = false;
-function injectComposerStyle(): void {
-  if (composerStyleInjected || typeof document === 'undefined') return;
-  composerStyleInjected = true;
-  const css = `
+const COMPOSER_CSS = `
 #composer { position: absolute; inset: 0; pointer-events: none; z-index: 60; }
 #composer.is-open { pointer-events: auto; }
 #composer .cmp-scrim {
@@ -416,8 +397,3 @@ function injectComposerStyle(): void {
 .cmp-test { background: #cfeffe; color: #1c5e7a; }
 .cmp-save { background: linear-gradient(180deg, #ffd86b, #ff9a5a); color: #2a2a2a; }
 `;
-  const style = document.createElement('style');
-  style.id = 'composer-style';
-  style.textContent = css;
-  document.head.appendChild(style);
-}
