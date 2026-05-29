@@ -3,6 +3,8 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -34,7 +36,9 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+      # Only the real deploy needs the artifact; PRs validate but don't publish.
       - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
@@ -42,6 +46,8 @@ jobs:
   deploy:
     name: Deploy
     needs: ci
+    # Never deploy from a pull request — only push to main / manual dispatch.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
