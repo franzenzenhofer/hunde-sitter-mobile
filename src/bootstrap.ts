@@ -145,9 +145,11 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
   setInterval(() => vocabPanel.refresh(), 1000);
 
   let lastPickedUp: 'ball' | 'treat' | null = null;
+  const act = (kind: ActionKind): void =>
+    performAction(kind, dog.stats, player.group.position, dog.group.position, ball, bag);
   const doAction = (): void => {
     const kind = resolveAction(player.group.position, dog.group.position, ball, bag, lastPickedUp);
-    performAction(kind, dog.stats, player.group.position, dog.group.position, ball, bag);
+    act(kind);
     if (kind === 'throw' || kind === 'feed') lastPickedUp = null;
   };
   keyboard.onAction(doAction);
@@ -170,13 +172,13 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
     ballInPlay: ball.mode !== 'idle',
     dogNear: player.group.position.distanceTo(dog.group.position) <= ACTION_NEAR_DOG,
     busy: trickBusy,
-    pet: () => performAction('pet', dog.stats, player.group.position, dog.group.position, ball, bag),
+    pet: () => act('pet'),
     feed: () => {
-      performAction('feed', dog.stats, player.group.position, dog.group.position, ball, bag);
+      act('feed');
       lastPickedUp = null;
     },
     throwBall: () => {
-      performAction('throw', dog.stats, player.group.position, dog.group.position, ball, bag);
+      act('throw');
       lastPickedUp = null;
     },
     reward: (strength) => emit('training:reward', { strength }),

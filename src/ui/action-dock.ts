@@ -19,6 +19,7 @@ import type {
 } from '../actions/game-commands';
 import { makeTrickCommand } from '../actions/game-commands';
 import type { CommandGroup } from '../actions/command';
+import { button, injectStyleOnce, vibrate } from './dom';
 
 export type DockDeps = {
   registry: GameRegistry;
@@ -52,7 +53,7 @@ const GROUPS: Array<{ id: CommandGroup; label: string }> = [
 ];
 
 export function createActionDock(host: HTMLElement, deps: DockDeps): ActionDock {
-  injectStyle();
+  injectStyleOnce('dock-style', DOCK_CSS);
 
   const el = document.createElement('div');
   el.id = 'dock';
@@ -99,12 +100,13 @@ export function createActionDock(host: HTMLElement, deps: DockDeps): ActionDock 
   };
 
   const buildChip = (cmd: GameCommand): Chip => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'dock-chip';
+    const btn = button({
+      className: 'dock-chip',
+      ariaLabel: `${cmd.label}${cmd.hint ? ` — ${cmd.hint}` : ''}`,
+      title: cmd.hint,
+      onClick: () => runCmd(cmd),
+    });
     btn.dataset.cmd = cmd.id;
-    btn.setAttribute('aria-label', `${cmd.label}${cmd.hint ? ` — ${cmd.hint}` : ''}`);
-    btn.title = cmd.hint;
 
     const ring = document.createElement('div');
     ring.className = 'dock-ring';
@@ -115,7 +117,6 @@ export function createActionDock(host: HTMLElement, deps: DockDeps): ActionDock 
     label.className = 'dock-lbl';
     label.textContent = cmd.label;
     btn.append(ring, icon, label);
-    btn.addEventListener('click', () => runCmd(cmd));
     return { cmd, el: btn, ring };
   };
 
@@ -129,18 +130,23 @@ export function createActionDock(host: HTMLElement, deps: DockDeps): ActionDock 
   const cluster = document.createElement('div');
   cluster.id = 'dock-cluster';
 
-  const toggle = document.createElement('button');
+  const toggle = button({
+    ariaLabel: 'Open command tray',
+    text: '🐾',
+    onClick: () => (open ? api.close() : api.open()),
+  });
   toggle.id = 'dock-toggle';
-  toggle.type = 'button';
-  toggle.setAttribute('aria-label', 'Open command tray');
   toggle.setAttribute('aria-expanded', 'false');
-  toggle.textContent = '🐾';
   if (!dockSeen()) toggle.classList.add('hint-pulse');
-  toggle.addEventListener('click', () => (open ? api.close() : api.open()));
 
-  const primary = document.createElement('button');
+  const primaryHandlers = new Set<() => void>();
+  const primary = button({
+    onClick: () => {
+      for (const h of primaryHandlers) h();
+      vibrate(12);
+    },
+  });
   primary.id = 'action';
-  primary.type = 'button';
   const primaryIcon = document.createElement('span');
   primaryIcon.className = 'action-ico';
   primaryIcon.textContent = '🐾';
@@ -148,11 +154,6 @@ export function createActionDock(host: HTMLElement, deps: DockDeps): ActionDock 
   primaryLabel.className = 'action-lbl';
   primaryLabel.textContent = 'Act';
   primary.append(primaryIcon, primaryLabel);
-  const primaryHandlers = new Set<() => void>();
-  primary.addEventListener('click', () => {
-    for (const h of primaryHandlers) h();
-    vibrate(12);
-  });
 
   cluster.append(toggle, primary);
   el.append(scrim, tray, cluster);
@@ -245,12 +246,6 @@ function markDockSeen(): void {
   }
 }
 
-function vibrate(ms: number): void {
-  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-    navigator.vibrate(ms);
-  }
-}
-
 function flash(chips: Chip[], id: string): void {
   const chip = chips.find((c) => c.cmd.id === id);
   if (!chip) return;
@@ -260,11 +255,7 @@ function flash(chips: Chip[], id: string): void {
   chip.el.classList.add('did-fire');
 }
 
-let styleInjected = false;
-function injectStyle(): void {
-  if (styleInjected || typeof document === 'undefined') return;
-  styleInjected = true;
-  const css = `
+const DOCK_CSS = `
 #dock { position: absolute; inset: 0; pointer-events: none; }
 #dock > * { pointer-events: auto; }
 
@@ -366,8 +357,3 @@ function injectStyle(): void {
 }
 .dock-chip.did-fire { animation: dock-fire 380ms ease-out; }
 `;
-  const style = document.createElement('style');
-  style.id = 'dock-style';
-  style.textContent = css;
-  document.head.appendChild(style);
-}

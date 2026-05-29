@@ -10,6 +10,7 @@ import type { TrainingEngine } from '../training/engine';
 import type { NodeResult, Program, Trick, WorldContext } from '../training/types';
 import { allPrimitives } from '../training/registry';
 import { runProgram } from '../training/interpreter';
+import { newTrick } from '../training/trick';
 
 declare global {
   interface Window {
@@ -83,19 +84,15 @@ export function installTestHooks(refs: {
       runProgram(program, refs.worldCtx, refs.engine.state.memory, new AbortController().signal),
     createTrick: ({ id, name, cueGestureId, program }) => {
       const tid = id ?? `t-${Date.now()}-${Math.floor(Math.random() * 9999)}`;
-      const trick: Trick = {
-        id: tid,
-        name,
-        ...(cueGestureId ? { cueGestureId } : {}),
-        program,
-        mastery: 0,
-        attempts: 0,
-        successes: 0,
-        reinforcements: 0,
-        authoredBy: 'player',
-        createdAt: Date.now(),
-      };
-      refs.engine.registerTrick(trick);
+      refs.engine.registerTrick(
+        newTrick({
+          id: tid,
+          name,
+          ...(cueGestureId ? { cueGestureId } : {}),
+          program,
+          authoredBy: 'player',
+        }),
+      );
       return tid;
     },
     fireGesture: (id) => {
