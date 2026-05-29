@@ -18,6 +18,8 @@ import { createCameraDrag } from './input/camera-drag';
 import { createKeyboard } from './input/keyboard';
 import { createActionDock } from './ui/action-dock';
 import { createGameRegistry, type GameActionContext } from './actions/game-commands';
+import { createTrickComposer } from './ui/trick-composer';
+import { runProgram } from './training/interpreter';
 import { createHud } from './ui/hud';
 import { createPickupHud } from './ui/pickup-hud';
 import { createActiveQuests } from './quests/active';
@@ -183,6 +185,7 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
       else emit('gesture:whistle', {});
     },
     performTrick,
+    teach: () => composer.open(),
   });
   const dock = createActionDock(ui, {
     registry: createGameRegistry(),
@@ -193,6 +196,40 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
   dock.onPrimary(doAction);
   dock.refreshTricks();
   setInterval(() => dock.refreshTricks(), 2000);
+
+  // The Trick Composer: author a program, bind a cue, save it as a real trick.
+  const composer = createTrickComposer(ui, {
+    onSave: (trick) => {
+      engine.registerTrick(trick);
+      if (trick.cueGestureId) {
+        // Give the player's chosen cue a strong head start so it works at once;
+        // reinforcement can push it the rest of the way.
+        const row = (engine.state.vocabulary[trick.cueGestureId] ??= {});
+        row[trick.id] = { strength: 0.7, reinforcements: 1, lastReinforcedAt: Date.now() };
+      }
+      dock.refreshTricks();
+      vocabPanel.refresh();
+      toast.show(`Bello learned “${trick.name}”`);
+    },
+    onTest: (program) => {
+      if (trickBusy) return;
+      trickBusy = true;
+      void runProgram(program, worldCtx, engine.state.memory, new AbortController().signal).finally(
+        () => {
+          trickBusy = false;
+        },
+      );
+    },
+    playerTricks: () =>
+      Object.values(engine.state.tricks)
+        .filter((t) => t.authoredBy === 'player')
+        .map((t) => ({ id: t.id, name: t.name })),
+    onDelete: (id) => {
+      delete engine.state.tricks[id];
+      dock.refreshTricks();
+      vocabPanel.refresh();
+    },
+  });
 
   let completedCount = 0;
   on('quest:complete', () => {
@@ -346,6 +383,9 @@ function setupParticleEvents(
   on('dog:fed', () => particles.burst(scene, dog.group.position, 0xffd86b, 14));
   on('dog:played', () => particles.burst(scene, dog.group.position, 0x9beaff, 14));
   on('quest:complete', () => particles.burst(scene, dog.group.position, 0xffe066, 36));
+  on('training:trick-executed', ({ success }) => {
+    if (success) particles.burst(scene, dog.group.position, 0xc9b3ff, 12);
+  });
 }
 
 function setupBiomeToast(toast: ReturnType<typeof createToast>): void {

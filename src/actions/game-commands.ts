@@ -32,6 +32,7 @@ export type GameActionContext = {
   reward(strength: number): void;
   cue(id: 'clap' | 'whistle'): void;
   performTrick(id: string): void;
+  teach(): void;
 };
 
 export type GameCommand = Command<GameActionContext>;
@@ -110,6 +111,14 @@ export function createGameCommands(): GameCommand[] {
       hint: 'Reward the last cue + behaviour to build vocabulary',
       cooldown: 250,
       execute: (ctx) => ctx.reward(1),
+    }),
+    new Command<GameActionContext>({
+      id: 'teach',
+      label: 'Teach',
+      icon: '✏️',
+      group: 'train',
+      hint: 'Compose a brand-new trick from actions',
+      execute: (ctx) => ctx.teach(),
     }),
   ];
 }

@@ -43,7 +43,8 @@ function buildInstructions(): HTMLDivElement {
     ['Drag your left thumb', ' to walk.'],
     ['Drag the right side', ' to look around.'],
     ['Tap the big button', ' for the smart action — pet, feed, or throw.'],
-    ['Tap 🐾', ' to open commands: clap, whistle, ask for tricks, and reward Bello.'],
+    ['Tap 🐾', ' for commands: clap, whistle, ask for tricks, and reward Bello.'],
+    ['Hit ✏️ Teach', ' to invent your own tricks from actions.'],
   ];
   for (const [bold, rest] of lines) {
     const b = document.createElement('b');
