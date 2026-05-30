@@ -111,7 +111,9 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
   loadBuiltInPrimitives();
   const engine = createTrainingEngine();
   for (const trick of Object.values(seedTricks())) engine.registerTrick(trick);
-  const vocabPanel = createVocabPanel(ui, engine);
+  const vocabPanel = createVocabPanel();
+  ui.appendChild(vocabPanel.el);
+  const refreshVocab = (): void => vocabPanel.update(engine.state.vocabulary, engine.state.tricks);
 
   const worldCtx: WorldContext = {
     dog,
@@ -132,7 +134,7 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
   });
   on('training:reward', ({ strength }) => {
     engine.recordReward(strength);
-    vocabPanel.refresh();
+    refreshVocab();
   });
   on('dog:fed', () => {
     emit('training:reward', { strength: 1 });
@@ -140,7 +142,7 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
   on('dog:petted', () => {
     emit('training:reward', { strength: 0.5 });
   });
-  setInterval(() => vocabPanel.refresh(), 1000);
+  setInterval(() => refreshVocab(), 1000);
 
   let lastPickedUp: 'ball' | 'treat' | null = null;
   const act = (kind: ActionKind): void =>
@@ -209,7 +211,7 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
         row[trick.id] = { strength: 0.7, reinforcements: 1, lastReinforcedAt: Date.now() };
       }
       dock.refreshTricks();
-      vocabPanel.refresh();
+      refreshVocab();
       toast.show(`Bello learned “${trick.name}”`);
     },
     onTest: (program) => {
@@ -228,7 +230,7 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
     onDelete: (id) => {
       delete engine.state.tricks[id];
       dock.refreshTricks();
-      vocabPanel.refresh();
+      refreshVocab();
     },
   });
 

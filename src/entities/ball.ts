@@ -69,6 +69,14 @@ export function createBall(scene: Scene): Ball {
       if (mode !== 'flying' && mode !== 'dropped') return false;
       const wp = new Vector3();
       mesh.getWorldPosition(wp);
+      if (mode === 'dropped') {
+        // A grounded ball sits at y≈0.17 while the mouth rides ~1.25 up — a full
+        // 3D reach could never close that gap. The dog dips its head, so only the
+        // horizontal distance matters here.
+        const dx = wp.x - pos.x;
+        const dz = wp.z - pos.z;
+        return dx * dx + dz * dz < REACH_DIST_SQ;
+      }
       return wp.distanceToSquared(pos) < REACH_DIST_SQ;
     },
     carryWith: (host) => {
