@@ -40,11 +40,10 @@ function buildInstructions(): HTMLDivElement {
   const el = document.createElement('div');
   el.style.cssText = 'max-width:320px;line-height:1.5';
   const lines: Array<[string, string]> = [
-    ['Drag your left thumb', ' to walk.'],
-    ['Drag the right side', ' to look around.'],
-    ['Tap the big button', ' for the smart action — pet, feed, or throw.'],
-    ['Tap 🐾', ' for commands: clap, whistle, ask for tricks, and reward Bello.'],
-    ['Hit ✏️ Teach', ' to invent your own tricks from actions.'],
+    ['Drag your left thumb', ' to walk; drag the right to look.'],
+    ['Every action is on screen', ' — pet, feed, throw, clap, whistle, reward, tricks.'],
+    ['Cue → trick → reward', ', and Bello learns the cue.'],
+    ['Hit ✏️ Teach', ' to invent your own tricks — even a 🤸 Salto.'],
   ];
   for (const [bold, rest] of lines) {
     const b = document.createElement('b');
@@ -54,7 +53,7 @@ function buildInstructions(): HTMLDivElement {
     el.appendChild(document.createElement('br'));
   }
   el.appendChild(
-    document.createTextNode('Cue → trick → reward, and Bello learns the cue. Keep him happy!'),
+    document.createTextNode('Keep Bello happy, and teach him the impossible.'),
   );
   return el;
 }

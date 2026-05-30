@@ -31,7 +31,17 @@ describe('TrickComposer — structure', () => {
     const { host } = mount();
     expect(host.querySelector('#composer')!.classList.contains('is-open')).toBe(true);
     const adds = [...host.querySelectorAll('.cmp-add')].map((b) => b.getAttribute('data-add'));
-    expect(adds).toEqual(['sit', 'spin-cw', 'bark', 'paw-up', 'walk-forward', 'pause']);
+    expect(adds).toEqual([
+      'sit',
+      'spin-cw',
+      'bark',
+      'paw-up',
+      'jump',
+      'flip',
+      'roll-over',
+      'walk-forward',
+      'pause',
+    ]);
   });
 
   it('shows an empty hint until a step is added', () => {

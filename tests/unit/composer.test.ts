@@ -108,4 +108,15 @@ describe('composer — draftToTrick', () => {
     const trick = draftToTrick(draft({ cueGestureId: 'whistle' }));
     expect(trick.cueGestureId).toBe('whistle');
   });
+
+  it('composes a Salto from motor primitives (jump → flip)', () => {
+    const t = draftToTrick(
+      draft({ name: 'Backflip', steps: [makeStep('jump'), makeStep('flip')] }),
+      'salto',
+    );
+    expect(t.program).toEqual({
+      nodeId: 'seq',
+      children: [{ nodeId: 'jump' }, { nodeId: 'flip' }],
+    });
+  });
 });
