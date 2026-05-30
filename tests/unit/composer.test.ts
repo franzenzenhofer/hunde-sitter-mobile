@@ -10,6 +10,7 @@ import {
   type TrickDraft,
 } from '../../src/training/composer';
 import { loadBuiltInPrimitives, getPrimitive } from '../../src/training/registry';
+import { seedTricks } from '../../src/training/seed-tricks';
 
 const draft = (over: Partial<TrickDraft> = {}): TrickDraft => ({
   name: 'Trick',
@@ -27,6 +28,14 @@ describe('composer — palette', () => {
     // the wrappers buildProgram emits must exist too
     expect(getPrimitive('seq')).toBeDefined();
     expect(getPrimitive('repeat-n')).toBeDefined();
+  });
+
+  it('ships a seeded Salto trick backed by a registered primitive', () => {
+    loadBuiltInPrimitives();
+    const salto = seedTricks().salto;
+    expect(salto?.program).toEqual({ nodeId: 'flip' });
+    expect(salto?.authoredBy).toBe('system');
+    expect(getPrimitive(salto!.program.nodeId)).toBeDefined();
   });
 
   it('seeds default args for parameterised steps only', () => {

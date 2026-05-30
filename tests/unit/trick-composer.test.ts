@@ -38,7 +38,13 @@ describe('TrickComposer — structure', () => {
       'paw-up',
       'jump',
       'flip',
+      'back-flip',
       'roll-over',
+      'bow',
+      'beg',
+      'lie-down',
+      'shake',
+      'head-tilt',
       'walk-forward',
       'pause',
     ]);

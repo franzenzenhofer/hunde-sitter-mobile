@@ -35,7 +35,13 @@ export const STEP_PALETTE: PaletteEntry[] = [
   { nodeId: 'paw-up', name: 'Paw', icon: '🐾' },
   { nodeId: 'jump', name: 'Jump', icon: '🦘' },
   { nodeId: 'flip', name: 'Salto', icon: '🤸' },
+  { nodeId: 'back-flip', name: 'Back-flip', icon: '🙃' },
   { nodeId: 'roll-over', name: 'Roll', icon: '🤾' },
+  { nodeId: 'bow', name: 'Bow', icon: '🙇' },
+  { nodeId: 'beg', name: 'Beg', icon: '🙏' },
+  { nodeId: 'lie-down', name: 'Lie down', icon: '😴' },
+  { nodeId: 'shake', name: 'Shake', icon: '💦' },
+  { nodeId: 'head-tilt', name: 'Tilt', icon: '🤔' },
   {
     nodeId: 'walk-forward',
     name: 'Walk',
