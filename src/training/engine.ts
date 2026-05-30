@@ -50,14 +50,21 @@ export function createTrainingEngine(rng: () => number = Math.random): TrainingE
   };
 
   const pickTrickForGesture = (gestureId: string): string | null => {
+    const repertoire = Object.keys(state.tricks);
+    if (repertoire.length === 0) return null;
+    // Exploit: a learned cue tends to fire its strongest association — the
+    // chance it actually does grows with how well-conditioned it is.
     const row = state.vocabulary[gestureId];
-    if (!row) return null;
-    const entries = Object.entries(row).filter(([, a]) => a.strength > 0.05);
-    if (entries.length === 0) return null;
-    entries.sort(([, a], [, b]) => b.strength - a.strength);
-    const best = entries[0]!;
-    if (attemptSucceeds(best[1].strength, rng)) return best[0];
-    return null;
+    if (row) {
+      const learned = Object.entries(row)
+        .filter(([id, a]) => a.strength > 0.05 && state.tricks[id])
+        .sort(([, a], [, b]) => b.strength - a.strength)[0];
+      if (learned && attemptSucceeds(learned[1].strength, rng)) return learned[0];
+    }
+    // Explore: an untrained — or unsure — dog just tries something from its
+    // repertoire. This is the "random at first" reaction that reward shapes into
+    // a habit; it never goes silent, so there's always a behaviour to reinforce.
+    return repertoire[Math.floor(rng() * repertoire.length)] ?? null;
   };
 
   return {
