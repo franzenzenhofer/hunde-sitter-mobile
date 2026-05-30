@@ -8,7 +8,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # publish the built site to the gh-pages branch
+  contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: "pages"
@@ -33,13 +35,14 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
-      # Deploy by publishing the built site to the gh-pages branch. This is a
-      # plain git push (contents:write) — it does NOT use the GitHub Pages API,
-      # which the Actions token isn't permitted to call here ("Resource not
-      # accessible by integration"). Serve it via Settings → Pages → Source =
-      # "Deploy from a branch" → gh-pages → / (root). CNAME keeps the domain.
-      - name: Publish built site to gh-pages
+      - name: Upload Pages artifact
         if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+      - name: Publish built site to gh-pages (fallback source)
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
         working-directory: ./dist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -51,3 +54,19 @@ jobs:
           git add -A
           git commit -q -m "Deploy ${GITHUB_SHA}"
           git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages:gh-pages
+
+  deploy:
+    name: Deploy (GitHub Actions source)
+    needs: ci
+    if: github.event_name != 'pull_request'
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
