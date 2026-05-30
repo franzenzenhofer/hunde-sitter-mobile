@@ -3,22 +3,19 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
   pages: write
-  id-token: write
 
 concurrency:
-  group: "pages"
-  cancel-in-progress: false
+  group: pages
+  cancel-in-progress: true
 
 jobs:
-  ci:
-    name: Lint, test & build
+  deploy:
+    name: Build & publish
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,22 +24,12 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Lint
-        run: npm run lint
-      - name: Test
-        run: npm test
-      - name: Build
-        run: npm run build
-      - name: Upload Pages artifact
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./dist
-      - name: Publish built site to gh-pages (fallback source)
-        if: github.event_name != 'pull_request'
-        continue-on-error: true
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+      - name: Publish to gh-pages
         working-directory: ./dist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -55,18 +42,24 @@ jobs:
           git commit -q -m "Deploy ${GITHUB_SHA}"
           git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages:gh-pages
 
-  deploy:
-    name: Deploy (GitHub Actions source)
-    needs: ci
-    if: github.event_name != 'pull_request'
-    continue-on-error: true
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Point Pages at gh-pages branch
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          repo="${GITHUB_REPOSITORY}"
+          api="https://api.github.com/repos/$repo/pages"
+          echo "PUT $api -> source=gh-pages"
+          code=$(curl -s -o /tmp/p.json -w '%{http_code}' -X PUT \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$api" -d '{"source":{"branch":"gh-pages","path":"/"},"build_type":"legacy"}')
+          echo "-> HTTP $code"; cat /tmp/p.json 2>/dev/null || true; echo
+          if [ "$code" = "404" ]; then
+            echo "No Pages site yet; creating one on gh-pages"
+            code=$(curl -s -o /tmp/p.json -w '%{http_code}' -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "$api" -d '{"source":{"branch":"gh-pages","path":"/"}}')
+            echo "-> HTTP $code"; cat /tmp/p.json 2>/dev/null || true; echo
+          fi
