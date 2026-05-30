@@ -8,11 +8,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write # write: also publish a gh-pages branch as a fallback source
   pages: write
   id-token: write
 
-# Allow one concurrent deployment, never cancel a running one mid-publish.
+# One publish at a time; never cancel a running one mid-deploy.
 concurrency:
   group: "pages"
   cancel-in-progress: false
@@ -42,9 +42,26 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
+      # Belt-and-suspenders: also publish the built site to a gh-pages branch.
+      # If Pages is set to "Deploy from a branch", this updates the live URL even
+      # when the Actions deploy path is unavailable. Never fails the gate.
+      - name: Publish to gh-pages branch (fallback source)
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        working-directory: ./dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          touch .nojekyll
+          git init -q -b gh-pages
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add -A
+          git commit -q -m "Deploy ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages:gh-pages
 
   deploy:
-    name: Deploy
+    name: Deploy (GitHub Actions source)
     needs: ci
     # Never deploy from a pull request — only push to main / manual dispatch.
     if: github.event_name != 'pull_request'
@@ -57,8 +74,8 @@ jobs:
         uses: actions/configure-pages@v5
         with:
           # Auto-enable Pages with the "GitHub Actions" source if it isn't
-          # already — this is what fixes a deploy-pages step that fails in ~3s
-          # with "Pages not enabled". Idempotent when already configured.
+          # already — fixes a deploy-pages step that fails in ~3s with "Pages not
+          # enabled". Idempotent when already configured.
           enablement: true
       - name: Deploy to GitHub Pages
         id: deployment
