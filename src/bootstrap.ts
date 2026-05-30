@@ -21,7 +21,6 @@ import { createGameRegistry, type GameActionContext } from './actions/game-comma
 import { createTrickComposer } from './ui/trick-composer';
 import { runProgram } from './training/interpreter';
 import { createHud } from './ui/hud';
-import { createPickupHud } from './ui/pickup-hud';
 import { createActiveQuests } from './quests/active';
 import { createQuestBanner } from './quests/banner';
 import { grantReward } from './quests/rewards';
@@ -88,9 +87,8 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
   let dogCarrying = false;
 
   const cam = createFollowCamera(ctx.camera, player.group);
-  const fps = createFpsCounter(ui);
+  const fps = import.meta.env.DEV ? createFpsCounter(ui) : null;
   const hud = createHud(ui);
-  const pickupHud = createPickupHud(ui);
 
   const joystick = createJoystick(ui);
   const drag = createCameraDrag();
@@ -194,6 +192,7 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
     context: gameCtx,
     now: () => performance.now(),
     tricks: () => Object.values(engine.state.tricks).map((t) => ({ id: t.id, name: t.name })),
+    counts: () => ({ ball: bag.count('ball'), treat: bag.count('treat') }),
   });
   dock.onPrimary(doAction);
   dock.refreshTricks();
@@ -348,12 +347,11 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
     dock.setPrimary(PRIMARY_ICON[kind], ACTION_LABEL[kind], kind !== 'wait');
     dock.sync();
     hud.update(dog.stats);
-    pickupHud.update(bag);
     particles.update(ctx.scene, dt);
     butterflies.update(dt, player.group.position);
     sun.update(dt, player.group.position);
     cam.update(dt);
-    fps.update(dt);
+    fps?.update(dt);
     ctx.renderer.render(ctx.scene, ctx.camera);
   });
   loop.start();

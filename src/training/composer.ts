@@ -33,6 +33,9 @@ export const STEP_PALETTE: PaletteEntry[] = [
   { nodeId: 'spin-cw', name: 'Spin', icon: '🌀' },
   { nodeId: 'bark', name: 'Bark', icon: '📣' },
   { nodeId: 'paw-up', name: 'Paw', icon: '🐾' },
+  { nodeId: 'jump', name: 'Jump', icon: '🦘' },
+  { nodeId: 'flip', name: 'Salto', icon: '🤸' },
+  { nodeId: 'roll-over', name: 'Roll', icon: '🤾' },
   {
     nodeId: 'walk-forward',
     name: 'Walk',

@@ -7,6 +7,7 @@ type Harness = {
   host: HTMLDivElement;
   ctx: GameActionContext;
   state: { hasBall: boolean; hasTreat: boolean; ballInPlay: boolean; dogNear: boolean; busy: boolean };
+  counts: { ball: number; treat: number };
   spies: Record<
     'pet' | 'feed' | 'throwBall' | 'reward' | 'cue' | 'performTrick' | 'teach',
     ReturnType<typeof vi.fn>
@@ -17,6 +18,7 @@ type Harness = {
 
 function setup(overrides: Partial<DockDeps> = {}): { harness: Harness; deps: DockDeps } {
   const state = { hasBall: true, hasTreat: true, ballInPlay: false, dogNear: true, busy: false };
+  const counts = { ball: 0, treat: 0 };
   const clock = { t: 0 };
   const tricks: Array<{ id: string; name: string }> = [];
   const spies = {
@@ -53,179 +55,120 @@ function setup(overrides: Partial<DockDeps> = {}): { harness: Harness; deps: Doc
     context: () => ctx,
     now: () => clock.t,
     tricks: () => tricks,
+    counts: () => counts,
     ...overrides,
   };
-  return { harness: { host, ctx, state, spies, clock, tricks }, deps };
+  return { harness: { host, ctx, state, counts, spies, clock, tricks }, deps };
 }
 
 beforeEach(() => {
   document.body.replaceChildren();
 });
 
-describe('ActionDock — structure', () => {
-  it('mounts a primary button + toggle, tray closed by default', () => {
+describe('ActionDock — always visible', () => {
+  it('mounts the primary + every command chip, with no toggle to hide them', () => {
     const { harness, deps } = setup();
     createActionDock(harness.host, deps);
     expect(harness.host.querySelector('#action')).toBeTruthy();
-    expect(harness.host.querySelector('#dock-toggle')).toBeTruthy();
-    expect(harness.host.querySelector('#dock')!.classList.contains('is-open')).toBe(false);
+    expect(harness.host.querySelector('#dock-toggle')).toBeNull();
+    const ids = [...harness.host.querySelectorAll('.dock-chip')].map((c) =>
+      c.getAttribute('data-cmd'),
+    );
+    expect(ids).toEqual(['pet', 'feed', 'throw', 'clap', 'whistle', 'reward', 'teach']);
   });
 
-  it('opens and closes the tray via the toggle, updating aria', () => {
+  it('runs a command on tap without opening anything', () => {
     const { harness, deps } = setup();
     createActionDock(harness.host, deps);
-    const dock = harness.host.querySelector('#dock')!;
-    const toggle = harness.host.querySelector<HTMLButtonElement>('#dock-toggle')!;
-
-    toggle.click();
-    expect(dock.classList.contains('is-open')).toBe(true);
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-
-    toggle.click();
-    expect(dock.classList.contains('is-open')).toBe(false);
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    harness.host.querySelector<HTMLButtonElement>('[data-cmd="pet"]')!.click();
+    expect(harness.spies.pet).toHaveBeenCalledOnce();
   });
 
-  it('stops pointer events from reaching the world (no camera spin on tap/scroll)', () => {
+  it('dims invalid commands and refuses their taps', () => {
+    const { harness, deps } = setup();
+    const dock = createActionDock(harness.host, deps);
+    harness.state.dogNear = false; // pet/feed invalid
+    dock.sync();
+    const pet = harness.host.querySelector<HTMLButtonElement>('[data-cmd="pet"]')!;
+    expect(pet.classList.contains('is-disabled')).toBe(true);
+    pet.click();
+    expect(harness.spies.pet).not.toHaveBeenCalled();
+  });
+
+  it('marks a command cooling and refuses re-fire until the cooldown elapses', () => {
+    const { harness, deps } = setup();
+    const dock = createActionDock(harness.host, deps);
+    const reward = harness.host.querySelector<HTMLButtonElement>('[data-cmd="reward"]')!;
+    reward.click(); // t=0
+    expect(harness.spies.reward).toHaveBeenCalledOnce();
+    expect(reward.classList.contains('is-cooling')).toBe(true);
+    harness.clock.t = 100;
+    reward.click();
+    expect(harness.spies.reward).toHaveBeenCalledOnce();
+    harness.clock.t = 300;
+    dock.sync();
+    reward.click();
+    expect(harness.spies.reward).toHaveBeenCalledTimes(2);
+  });
+
+  it('surfaces inventory as badges on Throw (balls) and Feed (treats)', () => {
+    const { harness, deps } = setup();
+    const dock = createActionDock(harness.host, deps);
+    harness.counts.ball = 3;
+    harness.counts.treat = 0;
+    dock.sync();
+    const throwBadge = harness.host.querySelector('[data-cmd="throw"] .dock-badge') as HTMLElement;
+    const feedBadge = harness.host.querySelector('[data-cmd="feed"] .dock-badge') as HTMLElement;
+    expect(throwBadge.hidden).toBe(false);
+    expect(throwBadge.textContent).toBe('3');
+    expect(feedBadge.hidden).toBe(true);
+  });
+
+  it('reflects and fires the contextual primary', () => {
+    const { harness, deps } = setup();
+    const dock = createActionDock(harness.host, deps);
+    const onPrimary = vi.fn();
+    dock.onPrimary(onPrimary);
+    dock.setPrimary('🎾', 'Throw', true);
+    const action = harness.host.querySelector<HTMLButtonElement>('#action')!;
+    expect(action.querySelector('.action-ico')!.textContent).toBe('🎾');
+    expect(action.querySelector('.action-lbl')!.textContent).toBe('Throw');
+    dock.setPrimary('⏳', '...', false);
+    expect(action.classList.contains('is-off')).toBe(true);
+    action.click();
+    expect(onPrimary).toHaveBeenCalledOnce();
+  });
+
+  it('renders dynamic trick chips and runs them, blocking while busy', () => {
+    const { harness, deps } = setup();
+    const dock = createActionDock(harness.host, deps);
+    harness.tricks.push({ id: 'salto', name: 'Salto' });
+    dock.refreshTricks();
+    const salto = harness.host.querySelector<HTMLButtonElement>('[data-cmd="trick:salto"]')!;
+    expect(salto.querySelector('.dock-lbl')!.textContent).toBe('Salto');
+    salto.click();
+    expect(harness.spies.performTrick).toHaveBeenCalledWith('salto');
+
+    harness.clock.t = 400; // past the trick's tap cooldown
+    harness.state.busy = true;
+    dock.sync();
+    expect(salto.classList.contains('is-disabled')).toBe(true);
+  });
+
+  it('stops pointer events from reaching the world', () => {
     const { harness, deps } = setup();
     createActionDock(harness.host, deps);
     const windowSpy = vi.fn();
     window.addEventListener('pointerdown', windowSpy);
     try {
       harness.host
-        .querySelector('#dock-toggle')!
+        .querySelector('[data-cmd="pet"]')!
         .dispatchEvent(new Event('pointerdown', { bubbles: true }));
       expect(windowSpy).not.toHaveBeenCalled();
-
-      // sanity: an event outside the dock still reaches the window
       document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
       expect(windowSpy).toHaveBeenCalledTimes(1);
     } finally {
       window.removeEventListener('pointerdown', windowSpy);
     }
-  });
-
-  it('renders every static command as a chip in its group', () => {
-    const { harness, deps } = setup();
-    createActionDock(harness.host, deps);
-    const ids = [...harness.host.querySelectorAll('.dock-chip')].map((c) =>
-      c.getAttribute('data-cmd'),
-    );
-    expect(ids).toEqual(['pet', 'feed', 'throw', 'clap', 'whistle', 'reward', 'teach']);
-  });
-});
-
-describe('ActionDock — behaviour', () => {
-  it('runs the command behind a chip and fires its handler', () => {
-    const { harness, deps } = setup();
-    const dock = createActionDock(harness.host, deps);
-    dock.open();
-    harness.host.querySelector<HTMLButtonElement>('[data-cmd="pet"]')!.click();
-    expect(harness.spies.pet).toHaveBeenCalledOnce();
-  });
-
-  it('dims chips whose predicate fails and blocks their clicks', () => {
-    const { harness, deps } = setup();
-    const dock = createActionDock(harness.host, deps);
-    dock.open();
-
-    harness.state.dogNear = false; // pet + feed become invalid
-    dock.sync();
-    const pet = harness.host.querySelector<HTMLButtonElement>('[data-cmd="pet"]')!;
-    expect(pet.classList.contains('is-disabled')).toBe(true);
-
-    pet.click(); // pointer-events:none in the browser; logic must also refuse
-    expect(harness.spies.pet).not.toHaveBeenCalled();
-  });
-
-  it('marks a command as cooling and refuses re-fire until the cooldown elapses', () => {
-    const { harness, deps } = setup();
-    const dock = createActionDock(harness.host, deps);
-    dock.open();
-    const reward = harness.host.querySelector<HTMLButtonElement>('[data-cmd="reward"]')!;
-
-    reward.click(); // t=0
-    expect(harness.spies.reward).toHaveBeenCalledOnce();
-    expect(reward.classList.contains('is-cooling')).toBe(true);
-
-    harness.clock.t = 100;
-    reward.click(); // still cooling (250ms)
-    expect(harness.spies.reward).toHaveBeenCalledOnce();
-
-    harness.clock.t = 300;
-    dock.sync();
-    expect(reward.classList.contains('is-cooling')).toBe(false);
-    reward.click();
-    expect(harness.spies.reward).toHaveBeenCalledTimes(2);
-  });
-
-  it('reflects the primary contextual action', () => {
-    const { harness, deps } = setup();
-    const dock = createActionDock(harness.host, deps);
-    const onPrimary = vi.fn();
-    dock.onPrimary(onPrimary);
-    dock.setPrimary('🎾', 'Throw', true);
-
-    const action = harness.host.querySelector<HTMLButtonElement>('#action')!;
-    expect(action.querySelector('.action-ico')!.textContent).toBe('🎾');
-    expect(action.querySelector('.action-lbl')!.textContent).toBe('Throw');
-    expect(action.classList.contains('is-off')).toBe(false);
-
-    dock.setPrimary('⏳', '...', false);
-    expect(action.classList.contains('is-off')).toBe(true);
-
-    action.click();
-    expect(onPrimary).toHaveBeenCalledOnce();
-  });
-
-  it('renders dynamic trick chips and runs them on tap', () => {
-    const { harness, deps } = setup();
-    const dock = createActionDock(harness.host, deps);
-    harness.tricks.push({ id: 'sit', name: 'Sit' }, { id: 'spin', name: 'Spin' });
-    dock.refreshTricks();
-    dock.open();
-
-    const sit = harness.host.querySelector<HTMLButtonElement>('[data-cmd="trick:sit"]')!;
-    expect(sit).toBeTruthy();
-    expect(sit.querySelector('.dock-lbl')!.textContent).toBe('Sit');
-    sit.click();
-    expect(harness.spies.performTrick).toHaveBeenCalledWith('sit');
-  });
-
-  it('pulses the toggle for discovery until first opened, then remembers', () => {
-    localStorage.removeItem('hs:dock-seen');
-    const first = setup();
-    const dock = createActionDock(first.harness.host, first.deps);
-    const toggle = first.harness.host.querySelector<HTMLButtonElement>('#dock-toggle')!;
-    expect(toggle.classList.contains('hint-pulse')).toBe(true);
-
-    dock.open();
-    expect(toggle.classList.contains('hint-pulse')).toBe(false);
-    expect(localStorage.getItem('hs:dock-seen')).toBe('1');
-
-    // Fresh document (single dock → no duplicate-id lookup ambiguity in jsdom).
-    document.body.replaceChildren();
-    const second = setup();
-    createActionDock(second.harness.host, second.deps);
-    expect(
-      second.harness.host.querySelector<HTMLButtonElement>('#dock-toggle')!.classList.contains(
-        'hint-pulse',
-      ),
-    ).toBe(false);
-  });
-
-  it('blocks trick chips while the dog is busy', () => {
-    const { harness, deps } = setup();
-    const dock = createActionDock(harness.host, deps);
-    harness.tricks.push({ id: 'sit', name: 'Sit' });
-    dock.refreshTricks();
-    dock.open();
-
-    harness.state.busy = true;
-    dock.sync();
-    const sit = harness.host.querySelector<HTMLButtonElement>('[data-cmd="trick:sit"]')!;
-    expect(sit.classList.contains('is-disabled')).toBe(true);
-    sit.click();
-    expect(harness.spies.performTrick).not.toHaveBeenCalled();
   });
 });
