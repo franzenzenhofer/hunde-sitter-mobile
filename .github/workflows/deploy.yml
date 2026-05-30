@@ -55,6 +55,11 @@ jobs:
     steps:
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          # Auto-enable Pages with the "GitHub Actions" source if it isn't
+          # already — this is what fixes a deploy-pages step that fails in ~3s
+          # with "Pages not enabled". Idempotent when already configured.
+          enablement: true
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
