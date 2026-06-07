@@ -35,7 +35,7 @@ import { createDebugOverlay } from './ui/debug-overlay';
 import { loadBuiltInPrimitives } from './training/registry';
 import { createTrainingEngine } from './training/engine';
 import { seedTricks } from './training/seed-tricks';
-import { createMemoryPanel } from './ui/memory-panel';
+import { createDebugHud } from './ui/debug-hud';
 import type { WorldContext } from './training/types';
 import { createWllamaEngine } from './ai/llm';
 import { createBelloBrain, type ActionDef, type Situation } from './ai/bello-brain';
@@ -89,9 +89,8 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
   loadBuiltInPrimitives();
   const engine = createTrainingEngine();
   for (const trick of Object.values(seedTricks())) engine.registerTrick(trick);
-  const memoryPanel = createMemoryPanel();
-  ui.appendChild(memoryPanel.el);
-  const refreshVocab = (): void => memoryPanel.update(brain.history, engine.state.tricks);
+  const debugHud = createDebugHud(ui);
+  const trickName = (id: string): string => engine.state.tricks[id]?.name ?? id;
 
   const worldCtx: WorldContext = {
     dog,
@@ -126,18 +125,20 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
   let lastUserCueAt = 0;
   const runBrain = (cue: string | null): void => {
     thinking = true;
-    brainStatus.setThinking(true);
+    debugHud.log(`${cue ?? '(idle)'} → thinking…`);
     void brain
       .decide({ cue, situation: situationNow(), actions: actionsNow() })
       .then((choice) => {
-        if (choice.thought) toast.show(`💭 ${choice.thought}`);
+        debugHud.setThought(choice.thought);
+        debugHud.log(`${cue ?? '(idle)'} → ${trickName(choice.action)}  "${choice.thought}"`);
         return engine.runTrick(choice.action, worldCtx);
       })
-      .catch(() => undefined)
+      .catch((e: unknown) => {
+        debugHud.log(`error: ${e instanceof Error ? e.message : String(e)}`);
+        return undefined;
+      })
       .finally(() => {
         thinking = false;
-        brainStatus.setThinking(false);
-        refreshVocab();
         if (pendingCue !== null) {
           const c = pendingCue;
           pendingCue = null;
@@ -148,7 +149,7 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
   const decideAndAct = (cue: string | null): void => {
     if (cue !== null) lastUserCueAt = performance.now();
     if (!llm.isReady()) {
-      if (cue) void engine.presentCue(cue, worldCtx).then(() => refreshVocab()); // instinct
+      if (cue) void engine.presentCue(cue, worldCtx); // instinct while the brain boots
       return;
     }
     if (thinking) {
@@ -161,7 +162,7 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
   on('training:reward', ({ strength }) => {
     engine.recordReward(strength);
     brain.reward(strength);
-    refreshVocab();
+    debugHud.log(`👍 reward ${strength}`);
   });
   // Bello acts on his own now and then once awake - but never while busy and
   // never right after the trainer cued him, so the player always feels in charge.
@@ -174,7 +175,6 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
   on('dog:petted', () => {
     emit('training:reward', { strength: 0.5 });
   });
-  setInterval(() => refreshVocab(), 1000);
 
   let lastPickedUp: 'ball' | 'treat' | null = null;
   const act = (kind: ActionKind): void =>

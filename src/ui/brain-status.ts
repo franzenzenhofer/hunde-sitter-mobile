@@ -6,7 +6,6 @@ export type BrainStatus = {
   el: HTMLDivElement;
   setProgress(pct: number): void;
   setReady(): void;
-  setThinking(on: boolean): void;
   setError(): void;
 };
 
@@ -44,11 +43,6 @@ export function createBrainStatus(host: HTMLElement): BrainStatus {
       setTimeout(() => {
         el.style.opacity = '0';
       }, 2200);
-    },
-    setThinking: (on) => {
-      if (!ready) return;
-      el.style.opacity = on ? '1' : '0';
-      render(on ? '💭 Bello is thinking…' : '🧠 Bello is awake');
     },
     setError: () => {
       ready = false;

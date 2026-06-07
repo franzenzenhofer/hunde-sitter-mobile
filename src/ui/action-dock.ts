@@ -148,39 +148,39 @@ const DOCK_CSS = `
 #dock { position: absolute; inset: 0; pointer-events: none; }
 #dock > * { pointer-events: auto; }
 
+/* Minimal, mobile-first: one row of small icon buttons, hugging the bottom. */
 #dock-rail {
   position: absolute;
   left: 50%; transform: translateX(-50%);
-  bottom: calc(20px + env(safe-area-inset-bottom));
-  max-width: min(560px, calc(100vw - 24px));
-  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: flex-end;
-  padding: 8px 10px;
-  background: rgba(255,255,255,0.30);
-  border-radius: 18px;
-  backdrop-filter: blur(6px);
+  bottom: calc(8px + env(safe-area-inset-bottom));
+  max-width: calc(100vw - 8px);
+  display: flex; flex-wrap: nowrap; gap: 4px; justify-content: center; align-items: center;
+  padding: 4px 5px;
+  background: rgba(255,255,255,0.22);
+  border-radius: 13px;
+  backdrop-filter: blur(5px);
 }
 
 .dock-chip {
-  position: relative; width: 58px; height: 58px; flex: 0 0 auto;
-  border: none; border-radius: 14px; cursor: pointer;
-  background: rgba(255,255,255,0.88);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.14);
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  position: relative; flex: 0 1 auto;
+  width: clamp(34px, 11.5vw, 46px); aspect-ratio: 1;
+  border: none; border-radius: 11px; cursor: pointer;
+  background: rgba(255,255,255,0.9);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.14);
+  display: flex; align-items: center; justify-content: center;
   transition: transform 90ms ease, opacity 160ms ease, filter 160ms ease;
 }
 /* Cues read as the "say something" group; rewards as the "good dog" group. */
 .dock-chip[data-group="cue"] { background: rgba(214,233,255,0.92); }
 .dock-chip[data-group="reward"] { background: rgba(255,233,209,0.92); }
-.dock-chip:active { transform: scale(0.92); }
-.dock-chip .dock-ico { font-size: 24px; line-height: 1; }
-.dock-chip .dock-lbl {
-  font: 700 9px -apple-system, sans-serif; color: #2a2a2a;
-  max-width: 54px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.dock-chip.is-disabled { opacity: 0.34; filter: grayscale(0.85); pointer-events: none; }
+.dock-chip:active { transform: scale(0.9); }
+.dock-chip .dock-ico { font-size: clamp(17px, 6vw, 23px); line-height: 1; }
+/* No text in the minimal UI - icons only. */
+.dock-chip .dock-lbl { display: none; }
+.dock-chip.is-disabled { opacity: 0.32; filter: grayscale(0.85); pointer-events: none; }
 .dock-chip.is-cooling { pointer-events: none; }
 .dock-ring {
-  position: absolute; inset: 0; border-radius: 14px; opacity: 0;
+  position: absolute; inset: 0; border-radius: 11px; opacity: 0;
   -webkit-mask: radial-gradient(transparent 62%, #000 64%);
   mask: radial-gradient(transparent 62%, #000 64%);
   transition: opacity 120ms ease;

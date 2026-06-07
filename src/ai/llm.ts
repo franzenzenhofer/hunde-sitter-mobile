@@ -23,8 +23,11 @@ const MODEL = {
   repo: 'bartowski/SmolLM2-135M-Instruct-GGUF',
   file: 'SmolLM2-135M-Instruct-Q4_K_M.gguf',
 };
-const N_CTX = 2048;
-const MAX_TOKENS = 80;
+// Keep the context tiny: KV-cache memory scales with n_ctx and is the main
+// cause of out-of-memory crashes on low-end mobile. Our prompts are short, so a
+// small window is plenty and keeps Bello stable on phones.
+const N_CTX = 512;
+const MAX_TOKENS = 48;
 // wllama's WASM blob, served from the jsdelivr CDN (matches the installed
 // version). Inlined to avoid bundling the WASM into our app.
 const WASM_CONFIG = {
@@ -48,40 +51,61 @@ export function createWllamaEngine(): LlmEngine {
     wllama = inst as unknown as { createChatCompletion(o: unknown): Promise<unknown> };
   };
 
+  const doChoose = async ({
+    system,
+    user,
+    actions,
+  }: {
+    system: string;
+    user: string;
+    actions: string[];
+  }): Promise<LlmChoice> => {
+    if (!wllama) throw new Error('Bello brain not loaded yet');
+    const res = (await wllama.createChatCompletion({
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      max_tokens: MAX_TOKENS,
+      temperature: 0.9,
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'bello_action',
+          strict: true,
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              thought: { type: 'string' },
+              action: { type: 'string', enum: actions },
+            },
+            required: ['action', 'thought'],
+          },
+        },
+      },
+    })) as { choices?: Array<{ message?: { content?: string } }> };
+    const content = res.choices?.[0]?.message?.content ?? '{}';
+    return parseChoice(content, actions);
+  };
+
+  // Serialise inference: concurrent createChatCompletion calls on one wllama
+  // instance crash the WASM runtime. Every choose() waits for the previous one.
+  let lock: Promise<unknown> = Promise.resolve();
+
   return {
     load: (onProgress) => {
       loading ??= doLoad(onProgress);
       return loading;
     },
     isReady: () => wllama !== null,
-    choose: async ({ system, user, actions }) => {
-      if (!wllama) throw new Error('Bello brain not loaded yet');
-      const res = (await wllama.createChatCompletion({
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-        max_tokens: MAX_TOKENS,
-        temperature: 0.8,
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'bello_action',
-            strict: true,
-            schema: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                thought: { type: 'string' },
-                action: { type: 'string', enum: actions },
-              },
-              required: ['action', 'thought'],
-            },
-          },
-        },
-      })) as { choices?: Array<{ message?: { content?: string } }> };
-      const content = res.choices?.[0]?.message?.content ?? '{}';
-      return parseChoice(content, actions);
+    choose: (input) => {
+      const result = lock.then(() => doChoose(input));
+      lock = result.then(
+        () => undefined,
+        () => undefined,
+      );
+      return result;
     },
   };
 }
