@@ -93,6 +93,10 @@ export function buildUserPrompt(
     lines.push('You have no memories yet - you are figuring things out.');
   }
   lines.push(`Situation: ${describeSituation(situation)}.`);
+  const last = history[history.length - 1];
+  if (last) {
+    lines.push(`You just did "${last.action}". Be playful and varied - surprise the trainer with a different trick unless a cue was clearly rewarded as that one.`);
+  }
   lines.push(cue ? `The trainer just signalled: "${cue}". What do you do?` : 'No cue right now - what do you do?');
   lines.push(`Choose one action id from: ${actions.map((a) => a.id).join(', ')}.`);
   return lines.join('\n');

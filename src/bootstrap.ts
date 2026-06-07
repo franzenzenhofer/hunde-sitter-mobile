@@ -122,11 +122,9 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
     Object.values(engine.state.tricks).map((t) => ({ id: t.id, name: t.name }));
 
   let thinking = false;
-  const decideAndAct = (cue: string | null): void => {
-    if (!llm.isReady() || thinking) {
-      if (cue) void engine.presentCue(cue, worldCtx).then(() => refreshVocab()); // instinct
-      return;
-    }
+  let pendingCue: string | null = null; // a USER cue queued while Bello is mid-thought
+  let lastUserCueAt = 0;
+  const runBrain = (cue: string | null): void => {
     thinking = true;
     brainStatus.setThinking(true);
     void brain
@@ -135,15 +133,29 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
         if (choice.thought) toast.show(`💭 ${choice.thought}`);
         return engine.runTrick(choice.action, worldCtx);
       })
-      .catch(() => {
-        if (cue) return engine.presentCue(cue, worldCtx);
-        return undefined;
-      })
+      .catch(() => undefined)
       .finally(() => {
         thinking = false;
         brainStatus.setThinking(false);
         refreshVocab();
+        if (pendingCue !== null) {
+          const c = pendingCue;
+          pendingCue = null;
+          runBrain(c); // a cue arrived while thinking - honour it now
+        }
       });
+  };
+  const decideAndAct = (cue: string | null): void => {
+    if (cue !== null) lastUserCueAt = performance.now();
+    if (!llm.isReady()) {
+      if (cue) void engine.presentCue(cue, worldCtx).then(() => refreshVocab()); // instinct
+      return;
+    }
+    if (thinking) {
+      if (cue !== null) pendingCue = cue; // never drop a trainer's cue; idle ticks are skipped
+      return;
+    }
+    runBrain(cue);
   };
   const cueGesture = (id: string): void => decideAndAct(id);
   on('training:reward', ({ strength }) => {
@@ -151,10 +163,11 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
     brain.reward(strength);
     refreshVocab();
   });
-  // Bello acts on his own now and then once awake - a real dog does things.
+  // Bello acts on his own now and then once awake - but never while busy and
+  // never right after the trainer cued him, so the player always feels in charge.
   setInterval(() => {
-    if (llm.isReady() && !thinking) decideAndAct(null);
-  }, 9000);
+    if (llm.isReady() && !thinking && performance.now() - lastUserCueAt > 8000) decideAndAct(null);
+  }, 12000);
   on('dog:fed', () => {
     emit('training:reward', { strength: 1 });
   });
