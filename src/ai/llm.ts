@@ -1,0 +1,98 @@
+/**
+ * Bello's real brain: a tiny LLM (SmolLM2-135M-Instruct) running fully in the
+ * browser via wllama (llama.cpp compiled to WASM, CPU, mobile-capable). The
+ * model is downloaded once (~105 MB) from the Hugging Face CDN and cached by
+ * wllama, so later visits start instantly and work offline.
+ *
+ * We expose a tiny `LlmEngine` interface so the dog's decision logic
+ * (`bello-brain`) depends only on this contract and can be unit-tested with a
+ * fake. The wllama dependency is dynamically imported inside load() so it never
+ * bloats the main bundle and only downloads when Bello wakes up.
+ */
+export type LlmChoice = { action: string; thought: string };
+
+export type LlmEngine = {
+  /** Download + initialise the model. onProgress reports 0..100. Idempotent. */
+  load(onProgress?: (pct: number) => void): Promise<void>;
+  isReady(): boolean;
+  /** Ask the model to pick ONE action id from `actions`, with a short thought. */
+  choose(input: { system: string; user: string; actions: string[] }): Promise<LlmChoice>;
+};
+
+const MODEL = {
+  repo: 'bartowski/SmolLM2-135M-Instruct-GGUF',
+  file: 'SmolLM2-135M-Instruct-Q4_K_M.gguf',
+};
+const N_CTX = 2048;
+const MAX_TOKENS = 80;
+// wllama's WASM blob, served from the jsdelivr CDN (matches the installed
+// version). Inlined to avoid bundling the WASM into our app.
+const WASM_CONFIG = {
+  default: 'https://cdn.jsdelivr.net/npm/@wllama/wllama@3.4.1/src/wasm/wllama.wasm',
+};
+
+export function createWllamaEngine(): LlmEngine {
+  // `unknown` until loaded; we keep wllama's type loose to avoid importing it
+  // eagerly (it would pull the WASM glue into the main chunk).
+  let wllama: { createChatCompletion(o: unknown): Promise<unknown> } | null = null;
+  let loading: Promise<void> | null = null;
+
+  const doLoad = async (onProgress?: (pct: number) => void): Promise<void> => {
+    const { Wllama } = await import('@wllama/wllama/esm/index.js');
+    const inst = new Wllama(WASM_CONFIG);
+    await inst.loadModelFromHF(MODEL, {
+      n_ctx: N_CTX,
+      progressCallback: ({ loaded, total }: { loaded: number; total: number }) =>
+        onProgress?.(total > 0 ? Math.round((loaded / total) * 100) : 0),
+    });
+    wllama = inst as unknown as { createChatCompletion(o: unknown): Promise<unknown> };
+  };
+
+  return {
+    load: (onProgress) => {
+      loading ??= doLoad(onProgress);
+      return loading;
+    },
+    isReady: () => wllama !== null,
+    choose: async ({ system, user, actions }) => {
+      if (!wllama) throw new Error('Bello brain not loaded yet');
+      const res = (await wllama.createChatCompletion({
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        max_tokens: MAX_TOKENS,
+        temperature: 0.8,
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'bello_action',
+            strict: true,
+            schema: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                thought: { type: 'string' },
+                action: { type: 'string', enum: actions },
+              },
+              required: ['action', 'thought'],
+            },
+          },
+        },
+      })) as { choices?: Array<{ message?: { content?: string } }> };
+      const content = res.choices?.[0]?.message?.content ?? '{}';
+      return parseChoice(content, actions);
+    },
+  };
+}
+
+/** Parse the model's JSON; the grammar guarantees a valid `action` enum value. */
+export function parseChoice(content: string, actions: string[]): LlmChoice {
+  try {
+    const obj = JSON.parse(content) as Partial<LlmChoice>;
+    const action = obj.action && actions.includes(obj.action) ? obj.action : actions[0]!;
+    return { action, thought: typeof obj.thought === 'string' ? obj.thought : '' };
+  } catch {
+    return { action: actions[0]!, thought: '' };
+  }
+}

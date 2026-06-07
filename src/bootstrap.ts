@@ -37,6 +37,9 @@ import { createTrainingEngine } from './training/engine';
 import { seedTricks } from './training/seed-tricks';
 import { createVocabPanel } from './training/vocab-panel';
 import type { WorldContext } from './training/types';
+import { createWllamaEngine } from './ai/llm';
+import { createBelloBrain, type ActionDef, type Situation } from './ai/bello-brain';
+import { createBrainStatus } from './ui/brain-status';
 
 const ACTION_NEAR_DOG = 2.6;
 
@@ -99,16 +102,59 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
     now: () => Date.now(),
   };
 
-  // A human cue: the dog's AI picks a behaviour to offer (random at first,
-  // shaped by reward over time) and performs it. presentCue logs the gesture,
-  // so reward can later pair it with whatever Bello just did.
-  const cueGesture = (id: string): void => {
-    void engine.presentCue(id, worldCtx).then(() => refreshVocab());
+  // Bello's real brain: a tiny in-browser LLM that decides what the dog does,
+  // using its memory of past cue -> action -> reward episodes as context. It
+  // downloads in the background; until it's awake, the dog runs on instinct
+  // (the lightweight conditioning engine) so the game is alive immediately.
+  const llm = createWllamaEngine();
+  const brain = createBelloBrain(llm);
+  const brainStatus = createBrainStatus(ui);
+  void llm
+    .load((pct) => brainStatus.setProgress(pct))
+    .then(() => brainStatus.setReady())
+    .catch(() => brainStatus.setError());
+
+  const situationNow = (): Situation => ({
+    ballVisible: ball.mode === 'flying' || ball.mode === 'dropped',
+    playerNear: player.group.position.distanceTo(dog.group.position) <= ACTION_NEAR_DOG,
+  });
+  const actionsNow = (): ActionDef[] =>
+    Object.values(engine.state.tricks).map((t) => ({ id: t.id, name: t.name }));
+
+  let thinking = false;
+  const decideAndAct = (cue: string | null): void => {
+    if (!llm.isReady() || thinking) {
+      if (cue) void engine.presentCue(cue, worldCtx).then(() => refreshVocab()); // instinct
+      return;
+    }
+    thinking = true;
+    brainStatus.setThinking(true);
+    void brain
+      .decide({ cue, situation: situationNow(), actions: actionsNow() })
+      .then((choice) => {
+        if (choice.thought) toast.show(`💭 ${choice.thought}`);
+        return engine.runTrick(choice.action, worldCtx);
+      })
+      .catch(() => {
+        if (cue) return engine.presentCue(cue, worldCtx);
+        return undefined;
+      })
+      .finally(() => {
+        thinking = false;
+        brainStatus.setThinking(false);
+        refreshVocab();
+      });
   };
+  const cueGesture = (id: string): void => decideAndAct(id);
   on('training:reward', ({ strength }) => {
     engine.recordReward(strength);
+    brain.reward(strength);
     refreshVocab();
   });
+  // Bello acts on his own now and then once awake - a real dog does things.
+  setInterval(() => {
+    if (llm.isReady() && !thinking) decideAndAct(null);
+  }, 9000);
   on('dog:fed', () => {
     emit('training:reward', { strength: 1 });
   });
