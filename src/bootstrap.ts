@@ -40,6 +40,7 @@ import type { WorldContext } from './training/types';
 import { createWllamaEngine } from './ai/llm';
 import { createBelloBrain, type ActionDef, type Situation } from './ai/bello-brain';
 import { createBrainStatus } from './ui/brain-status';
+import { showError } from './ui/error-overlay';
 
 const ACTION_NEAR_DOG = 2.6;
 
@@ -111,7 +112,10 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
   void llm
     .load((pct) => brainStatus.setProgress(pct))
     .then(() => brainStatus.setReady())
-    .catch(() => brainStatus.setError());
+    .catch((e: unknown) => {
+      brainStatus.setError();
+      showError('Bello brain failed to load', e);
+    });
 
   const placeNow = (): string => {
     const { x, z } = dog.group.position;
@@ -141,6 +145,7 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
       })
       .catch((e: unknown) => {
         debugHud.log(`error: ${e instanceof Error ? e.message : String(e)}`);
+        showError('Bello brain error', e);
         return undefined;
       })
       .finally(() => {
@@ -154,10 +159,7 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
   };
   const decideAndAct = (cue: string | null): void => {
     if (cue !== null) lastUserCueAt = performance.now();
-    if (!llm.isReady()) {
-      if (cue) void engine.presentCue(cue, worldCtx); // instinct while the brain boots
-      return;
-    }
+    if (!llm.isReady()) return; // brain still loading — the status pill shows progress; no instinct fallback
     if (thinking) {
       if (cue !== null) pendingCue = cue; // never drop a trainer's cue; idle ticks are skipped
       return;
