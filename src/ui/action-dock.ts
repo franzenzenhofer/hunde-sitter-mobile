@@ -154,8 +154,8 @@ const DOCK_CSS = `
   left: 50%; transform: translateX(-50%);
   bottom: calc(8px + env(safe-area-inset-bottom));
   max-width: calc(100vw - 8px);
-  display: flex; flex-wrap: nowrap; gap: 4px; justify-content: center; align-items: center;
-  padding: 4px 5px;
+  display: flex; flex-wrap: nowrap; gap: 3px; justify-content: center; align-items: center;
+  padding: 4px;
   background: rgba(255,255,255,0.22);
   border-radius: 13px;
   backdrop-filter: blur(5px);
@@ -163,7 +163,7 @@ const DOCK_CSS = `
 
 .dock-chip {
   position: relative; flex: 0 1 auto;
-  width: clamp(34px, 11.5vw, 46px); aspect-ratio: 1;
+  width: clamp(28px, 10vw, 44px); aspect-ratio: 1;
   border: none; border-radius: 11px; cursor: pointer;
   background: rgba(255,255,255,0.9);
   box-shadow: 0 1px 4px rgba(0,0,0,0.14);
@@ -174,7 +174,7 @@ const DOCK_CSS = `
 .dock-chip[data-group="cue"] { background: rgba(214,233,255,0.92); }
 .dock-chip[data-group="reward"] { background: rgba(255,233,209,0.92); }
 .dock-chip:active { transform: scale(0.9); }
-.dock-chip .dock-ico { font-size: clamp(17px, 6vw, 23px); line-height: 1; }
+.dock-chip .dock-ico { font-size: clamp(15px, 5vw, 22px); line-height: 1; }
 /* No text in the minimal UI - icons only. */
 .dock-chip .dock-lbl { display: none; }
 .dock-chip.is-disabled { opacity: 0.32; filter: grayscale(0.85); pointer-events: none; }
