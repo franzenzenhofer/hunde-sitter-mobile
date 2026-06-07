@@ -46,7 +46,10 @@ export function createBrainStatus(host: HTMLElement): BrainStatus {
     },
     setError: () => {
       ready = false;
-      render('🧠 Bello’s brain failed — see error');
+      render('🐶 Bello runs on instinct (brain unavailable)');
+      setTimeout(() => {
+        el.style.opacity = '0';
+      }, 4000);
     },
   };
 }
