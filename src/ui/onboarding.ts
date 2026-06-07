@@ -41,9 +41,10 @@ function buildInstructions(): HTMLDivElement {
   el.style.cssText = 'max-width:320px;line-height:1.5';
   const lines: Array<[string, string]> = [
     ['Drag your left thumb', ' to walk; drag the right to look.'],
-    ['Every action is on screen', ' — pet, feed, throw, clap, whistle, reward, tricks.'],
-    ['Cue → trick → reward', ', and Bello learns the cue.'],
-    ['Hit ✏️ Teach', ' to invent your own tricks — even a 🤸 Salto.'],
+    ['Two fingers', ' on the right: pinch to zoom, twist to orbit.'],
+    ['You are the trainer', ' - the buttons are YOUR actions, not his.'],
+    ['Cue, then reward', ': clap, see what Bello offers, and 👍 / 🍖 / ❤️ what you like.'],
+    ['Repeat', ' and the cue starts triggering that behaviour on its own.'],
   ];
   for (const [bold, rest] of lines) {
     const b = document.createElement('b');
@@ -52,9 +53,7 @@ function buildInstructions(): HTMLDivElement {
     el.appendChild(document.createTextNode(rest));
     el.appendChild(document.createElement('br'));
   }
-  el.appendChild(
-    document.createTextNode('Keep Bello happy, and teach him the impossible.'),
-  );
+  el.appendChild(document.createTextNode('Train Bello like a real dog.'));
   return el;
 }
 

@@ -17,7 +17,7 @@
 export type TapTarget = { x: number; z: number };
 
 /** Buckets the dock groups commands under. Order here is display order. */
-export type CommandGroup = 'care' | 'play' | 'train';
+export type CommandGroup = 'cue' | 'reward' | 'play' | 'care' | 'train';
 
 export type CommandSpec<Ctx> = {
   id: string;

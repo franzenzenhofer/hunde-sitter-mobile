@@ -1,19 +1,21 @@
 /**
- * The repertoire of things the dog-sitter can do, expressed declaratively on
- * top of {@link Command}. Each command only knows *whether* it is valid right
- * now (canExecute) and *what* it does to the game context (execute) — the dock
- * renders whatever is here, so growing the game is just adding a Command.
+ * Everything the HUMAN can do - and nothing the dog does. This is a dog-
+ * training simulator: you never press "sit". You give Bello cues and rewards,
+ * and his internal AI decides what to do and learns from how you reward it.
  *
- * Three groups map to the premise of a programmable dog simulator:
- *   care  — keep Bello happy   (Pet, Feed)
- *   play  — physical play       (Throw)
- *   train — the programmable core: cues, reward, and performing tricks. This is
- *           the operant-conditioning loop — Cue → Trick → Reward builds the
- *           dog's vocabulary until a cue alone triggers the behaviour.
+ * Two kinds of human action:
+ *   cue    - a signal the dog can learn to read (clap, whistle, point, snap).
+ *            Each cue makes the dog offer a behaviour; reward shapes which one.
+ *   reward - reinforce what just happened (Good!, Treat, Pet). Plus Throw for
+ *            play. The cue -> behaviour -> reward loop is the whole game.
  */
 import { Command, CommandRegistry } from './command';
 
-/** Everything the live game must expose for commands to act on. */
+/** The cue signals the human can give. Each is a distinct stimulus to condition. */
+export const CUES = ['clap', 'whistle', 'point', 'snap'] as const;
+export type CueId = (typeof CUES)[number];
+
+/** Everything the live game must expose for human commands to act on. */
 export type GameActionContext = {
   /** Player is carrying at least one ball. */
   hasBall: boolean;
@@ -23,118 +25,91 @@ export type GameActionContext = {
   ballInPlay: boolean;
   /** Player is close enough to touch the dog. */
   dogNear: boolean;
-  /** A trick animation is currently playing (blocks overlapping tricks). */
-  busy: boolean;
 
   pet(): void;
   feed(): void;
   throwBall(): void;
   reward(strength: number): void;
-  cue(id: 'clap' | 'whistle'): void;
-  performTrick(id: string): void;
-  teach(): void;
+  cue(id: CueId): void;
 };
 
 export type GameCommand = Command<GameActionContext>;
 export type GameRegistry = CommandRegistry<GameActionContext>;
 
-/** Default glyphs for the seed tricks; authored tricks can supply their own. */
-export const TRICK_ICONS: Record<string, string> = {
-  sit: '🪑',
-  bark: '📣',
-  spin: '🌀',
-  pawup: '🐾',
+/** Glyph shown for each cue, mirrored by the vocabulary panel. */
+export const CUE_ICON: Record<CueId, string> = {
+  clap: '👏',
+  whistle: '😙',
+  point: '👉',
+  snap: '🫰',
 };
 
-export function trickIcon(id: string): string {
-  return TRICK_ICONS[id] ?? '✨';
-}
+const CUE_HINT: Record<CueId, string> = {
+  clap: 'Clap - a signal Bello can learn to read',
+  whistle: 'Whistle - a second signal to tell apart',
+  point: 'Point - a hand signal to condition',
+  snap: 'Snap - one more cue to train',
+};
 
 /**
- * The static commands. Tricks are created dynamically from the engine's known
- * tricks via {@link makeTrickCommand} so newly-authored tricks appear for free.
+ * The human action deck. Cues make the dog offer a behaviour; rewards reinforce
+ * it. The dock renders whatever is here, so the player's whole range is always
+ * on screen, lit when usable and dimmed when not.
  */
 export function createGameCommands(): GameCommand[] {
+  const cueCommands = CUES.map(
+    (id) =>
+      new Command<GameActionContext>({
+        id,
+        label: id[0]!.toUpperCase() + id.slice(1),
+        icon: CUE_ICON[id],
+        group: 'cue',
+        hint: CUE_HINT[id],
+        cooldown: 350,
+        execute: (ctx) => ctx.cue(id),
+      }),
+  );
   return [
+    ...cueCommands,
+    new Command<GameActionContext>({
+      id: 'reward',
+      label: 'Good!',
+      icon: '👍',
+      group: 'reward',
+      hint: 'Reward the last cue + behaviour so Bello learns it',
+      cooldown: 250,
+      execute: (ctx) => ctx.reward(1),
+    }),
+    new Command<GameActionContext>({
+      id: 'feed',
+      label: 'Treat',
+      icon: '🍖',
+      group: 'reward',
+      hint: 'Feed a treat - a strong reward (needs a treat, stay close)',
+      cooldown: 400,
+      canExecute: (ctx) => ctx.hasTreat && ctx.dogNear,
+      execute: (ctx) => ctx.feed(),
+    }),
     new Command<GameActionContext>({
       id: 'pet',
       label: 'Pet',
       icon: '❤️',
-      group: 'care',
-      hint: 'Give Bello some love',
+      group: 'reward',
+      hint: 'Pet Bello - a gentle reward (stay close)',
       cooldown: 600,
       canExecute: (ctx) => ctx.dogNear,
       execute: (ctx) => ctx.pet(),
-    }),
-    new Command<GameActionContext>({
-      id: 'feed',
-      label: 'Feed',
-      icon: '🍖',
-      group: 'care',
-      hint: 'Feed a treat — fills hunger',
-      cooldown: 400,
-      canExecute: (ctx) => ctx.hasTreat && ctx.dogNear,
-      execute: (ctx) => ctx.feed(),
     }),
     new Command<GameActionContext>({
       id: 'throw',
       label: 'Throw',
       icon: '🎾',
       group: 'play',
-      hint: 'Throw the ball — Bello fetches it',
+      hint: 'Throw the ball - Bello fetches it',
       canExecute: (ctx) => ctx.hasBall && !ctx.ballInPlay,
       execute: (ctx) => ctx.throwBall(),
     }),
-    new Command<GameActionContext>({
-      id: 'clap',
-      label: 'Clap',
-      icon: '👏',
-      group: 'train',
-      hint: 'A cue — pair it with a trick, then reward',
-      cooldown: 400,
-      execute: (ctx) => ctx.cue('clap'),
-    }),
-    new Command<GameActionContext>({
-      id: 'whistle',
-      label: 'Whistle',
-      icon: '😙',
-      group: 'train',
-      hint: 'A second cue — teach Bello to tell them apart',
-      cooldown: 600,
-      execute: (ctx) => ctx.cue('whistle'),
-    }),
-    new Command<GameActionContext>({
-      id: 'reward',
-      label: 'Good!',
-      icon: '👍',
-      group: 'train',
-      hint: 'Reward the last cue + behaviour to build vocabulary',
-      cooldown: 250,
-      execute: (ctx) => ctx.reward(1),
-    }),
-    new Command<GameActionContext>({
-      id: 'teach',
-      label: 'Teach',
-      icon: '✏️',
-      group: 'train',
-      hint: 'Compose a brand-new trick from actions',
-      execute: (ctx) => ctx.teach(),
-    }),
   ];
-}
-
-/** Build a command that performs a known trick (Sit, Spin, …) on tap. */
-export function makeTrickCommand(trick: { id: string; name: string }): GameCommand {
-  return new Command<GameActionContext>({
-    id: `trick:${trick.id}`,
-    label: trick.name,
-    icon: trickIcon(trick.id),
-    group: 'train',
-    hint: `Ask Bello to ${trick.name.toLowerCase()}`,
-    cooldown: 300,
-    canExecute: (ctx) => !ctx.busy,
-    execute: (ctx) => ctx.performTrick(trick.id),
-  });
 }
 
 export function createGameRegistry(): GameRegistry {

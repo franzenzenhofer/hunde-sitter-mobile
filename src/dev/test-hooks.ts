@@ -32,7 +32,7 @@ declare global {
         cueGestureId?: string;
         program: Program;
       }): string;
-      fireGesture(id: 'clap' | 'whistle' | 'tap'): void;
+      fireGesture(id: string): void;
       reward(strength?: number): void;
       vocabulary(): Record<string, Record<string, { strength: number }>>;
       memoryDump(): Record<number, number>;
@@ -53,6 +53,7 @@ export function installTestHooks(refs: {
   worldCtx: WorldContext;
   pet(): void;
   doAction(): void;
+  cue(id: string): void;
 }): void {
   if (!import.meta.env.DEV && !window.location.search.includes('playtest=1')) return;
   window.__hs = {
@@ -95,9 +96,7 @@ export function installTestHooks(refs: {
       );
       return tid;
     },
-    fireGesture: (id) => {
-      emit(`gesture:${id}` as 'gesture:clap', {});
-    },
+    fireGesture: (id) => refs.cue(id),
     reward: (strength = 1) => emit('training:reward', { strength }),
     vocabulary: () => refs.engine.state.vocabulary,
     memoryDump: () => Object.fromEntries(refs.engine.state.memory.entries()),

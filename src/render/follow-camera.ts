@@ -10,6 +10,8 @@ export type FollowCamera = {
 
 const MIN_PITCH = 0.2;
 const MAX_PITCH = 1.2;
+const MIN_DISTANCE = 4;
+const MAX_DISTANCE = 16;
 const SMOOTH = 6;
 
 export function createFollowCamera(camera: PerspectiveCamera, target: Object3D): FollowCamera {
@@ -20,6 +22,7 @@ export function createFollowCamera(camera: PerspectiveCamera, target: Object3D):
     distance: 9,
     update: (dt) => {
       state.pitch = Math.min(MAX_PITCH, Math.max(MIN_PITCH, state.pitch));
+      state.distance = Math.min(MAX_DISTANCE, Math.max(MIN_DISTANCE, state.distance));
       const cosP = Math.cos(state.pitch);
       const offset = new Vector3(
         Math.sin(state.yaw) * state.distance * cosP,

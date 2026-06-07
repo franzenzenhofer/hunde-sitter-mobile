@@ -1,15 +1,31 @@
 import type { Trick } from './types';
 import { newTrick } from './trick';
 
+/**
+ * Bello's innate behaviour repertoire - the things his body already knows how
+ * to do. These are NOT human buttons: the human never picks a behaviour
+ * directly. When the human cues (clap, whistle, ...) the dog's AI chooses one
+ * of these to offer, random at first; rewarding what you like conditions the
+ * cue to that behaviour over time. The full motor range is here so any of it
+ * can be trained onto any cue.
+ */
 export function seedTricks(): Record<string, Trick> {
-  return {
-    sit: newTrick({ id: 'sit', name: 'Sit', program: { nodeId: 'sit' } }),
-    bark: newTrick({ id: 'bark', name: 'Bark', program: { nodeId: 'bark' } }),
-    spin: newTrick({ id: 'spin', name: 'Spin', program: { nodeId: 'spin-cw' } }),
-    pawup: newTrick({ id: 'pawup', name: 'Paw', program: { nodeId: 'paw-up' } }),
-    // A ready-made acrobatic trick so the salto — and the whole compose-a-trick
-    // idea — is discoverable from the very first session. Players can open it in
-    // Teach to see how it's built, then author their own.
-    salto: newTrick({ id: 'salto', name: 'Salto', program: { nodeId: 'flip' } }),
-  };
+  const t = (id: string, name: string, nodeId: string): Trick =>
+    newTrick({ id, name, program: { nodeId } });
+  const list = [
+    t('sit', 'Sit', 'sit'),
+    t('lie-down', 'Lie down', 'lie-down'),
+    t('bark', 'Bark', 'bark'),
+    t('spin', 'Spin', 'spin-cw'),
+    t('pawup', 'Paw', 'paw-up'),
+    t('shake', 'Shake', 'shake'),
+    t('bow', 'Bow', 'bow'),
+    t('beg', 'Beg', 'beg'),
+    t('head-tilt', 'Head tilt', 'head-tilt'),
+    t('jump', 'Jump', 'jump'),
+    t('roll-over', 'Roll over', 'roll-over'),
+    t('salto', 'Salto', 'flip'),
+    t('back-flip', 'Back-flip', 'back-flip'),
+  ];
+  return Object.fromEntries(list.map((trick) => [trick.id, trick]));
 }

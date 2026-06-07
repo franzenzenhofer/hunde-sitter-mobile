@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   createGameRegistry,
-  makeTrickCommand,
-  trickIcon,
+  CUES,
+  CUE_ICON,
   type GameActionContext,
 } from '../../src/actions/game-commands';
 
@@ -12,55 +12,68 @@ function fakeCtx(over: Partial<GameActionContext> = {}): GameActionContext {
     hasTreat: false,
     ballInPlay: false,
     dogNear: false,
-    busy: false,
     pet: vi.fn(),
     feed: vi.fn(),
     throwBall: vi.fn(),
     reward: vi.fn(),
     cue: vi.fn(),
-    performTrick: vi.fn(),
-    teach: vi.fn(),
     ...over,
   };
 }
 
-describe('game command repertoire', () => {
-  it('registers the six static commands across care/play/train', () => {
+describe('human action deck', () => {
+  it('exposes only human actions: four cues, three rewards, throw - no dog actions', () => {
     const reg = createGameRegistry();
     expect(reg.all().map((c) => c.id)).toEqual([
-      'pet',
-      'feed',
-      'throw',
       'clap',
       'whistle',
+      'point',
+      'snap',
       'reward',
-      'teach',
+      'feed',
+      'pet',
+      'throw',
     ]);
-    expect(reg.group('care').map((c) => c.id)).toEqual(['pet', 'feed']);
+    expect(reg.group('cue').map((c) => c.id)).toEqual(['clap', 'whistle', 'point', 'snap']);
+    expect(reg.group('reward').map((c) => c.id)).toEqual(['reward', 'feed', 'pet']);
     expect(reg.group('play').map((c) => c.id)).toEqual(['throw']);
-    expect(reg.group('train').map((c) => c.id)).toEqual(['clap', 'whistle', 'reward', 'teach']);
   });
 
-  it('teach opens the composer via the context', () => {
+  it('every cue is always available and routes its own id to ctx.cue', () => {
+    const reg = createGameRegistry();
+    for (const id of CUES) {
+      const ctx = fakeCtx();
+      expect(reg.get(id)!.canExecute(ctx)).toBe(true);
+      expect(reg.get(id)!.icon).toBe(CUE_ICON[id]);
+      reg.execute(id, ctx);
+      expect(ctx.cue).toHaveBeenCalledWith(id);
+    }
+  });
+
+  it('Good! reward is always available and grants full strength', () => {
     const reg = createGameRegistry();
     const ctx = fakeCtx();
-    reg.execute('teach', ctx);
-    expect(ctx.teach).toHaveBeenCalledOnce();
+    expect(reg.get('reward')!.canExecute(ctx)).toBe(true);
+    reg.execute('reward', ctx);
+    expect(ctx.reward).toHaveBeenCalledWith(1);
   });
 
-  it('pet is only available near the dog and grants love', () => {
+  it('treat needs a treat AND proximity', () => {
+    const feed = createGameRegistry().get('feed')!;
+    expect(feed.canExecute(fakeCtx({ hasTreat: true, dogNear: false }))).toBe(false);
+    expect(feed.canExecute(fakeCtx({ hasTreat: false, dogNear: true }))).toBe(false);
+    expect(feed.canExecute(fakeCtx({ hasTreat: true, dogNear: true }))).toBe(true);
+    const ctx = fakeCtx({ hasTreat: true, dogNear: true });
+    feed.execute(ctx);
+    expect(ctx.feed).toHaveBeenCalledOnce();
+  });
+
+  it('pet is only available near the dog', () => {
     const reg = createGameRegistry();
     expect(reg.get('pet')!.canExecute(fakeCtx({ dogNear: false }))).toBe(false);
     const ctx = fakeCtx({ dogNear: true });
     expect(reg.execute('pet', ctx)).toBe(true);
     expect(ctx.pet).toHaveBeenCalledOnce();
-  });
-
-  it('feed needs a treat AND proximity', () => {
-    const feed = createGameRegistry().get('feed')!;
-    expect(feed.canExecute(fakeCtx({ hasTreat: true, dogNear: false }))).toBe(false);
-    expect(feed.canExecute(fakeCtx({ hasTreat: false, dogNear: true }))).toBe(false);
-    expect(feed.canExecute(fakeCtx({ hasTreat: true, dogNear: true }))).toBe(true);
   });
 
   it('throw needs a ball and no ball already in play', () => {
@@ -74,46 +87,11 @@ describe('game command repertoire', () => {
     expect(ctx.throwBall).toHaveBeenCalledOnce();
   });
 
-  it('cues and reward are always available and route to the right handler', () => {
-    const reg = createGameRegistry();
-    const ctx = fakeCtx();
-    expect(reg.get('clap')!.canExecute(ctx)).toBe(true);
-    expect(reg.get('whistle')!.canExecute(ctx)).toBe(true);
-    expect(reg.get('reward')!.canExecute(ctx)).toBe(true);
-
-    reg.execute('clap', ctx);
-    reg.execute('whistle', ctx);
-    reg.execute('reward', ctx);
-    expect(ctx.cue).toHaveBeenNthCalledWith(1, 'clap');
-    expect(ctx.cue).toHaveBeenNthCalledWith(2, 'whistle');
-    expect(ctx.reward).toHaveBeenCalledWith(1);
-  });
-
   it('reward respects its cooldown so it cannot be spammed in a single tick', () => {
     const reward = createGameRegistry().get('reward')!;
     const ctx = fakeCtx();
     expect(reward.execute(ctx, null, 0)).toBe(true);
     expect(reward.execute(ctx, null, 100)).toBe(false);
     expect(reward.execute(ctx, null, 300)).toBe(true);
-  });
-});
-
-describe('trick commands', () => {
-  it('performs the trick and is blocked while the dog is busy', () => {
-    const cmd = makeTrickCommand({ id: 'sit', name: 'Sit' });
-    expect(cmd.id).toBe('trick:sit');
-    expect(cmd.label).toBe('Sit');
-    expect(cmd.group).toBe('train');
-
-    expect(cmd.canExecute(fakeCtx({ busy: true }))).toBe(false);
-    const ctx = fakeCtx({ busy: false });
-    expect(cmd.execute(ctx)).toBe(true);
-    expect(ctx.performTrick).toHaveBeenCalledWith('sit');
-  });
-
-  it('uses a per-trick glyph with a sensible fallback', () => {
-    expect(trickIcon('spin')).toBe('🌀');
-    expect(makeTrickCommand({ id: 'sit', name: 'Sit' }).icon).toBe('🪑');
-    expect(makeTrickCommand({ id: 'rollover', name: 'Roll Over' }).icon).toBe('✨');
   });
 });

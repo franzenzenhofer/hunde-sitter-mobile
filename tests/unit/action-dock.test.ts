@@ -6,29 +6,22 @@ import { createGameRegistry, type GameActionContext } from '../../src/actions/ga
 type Harness = {
   host: HTMLDivElement;
   ctx: GameActionContext;
-  state: { hasBall: boolean; hasTreat: boolean; ballInPlay: boolean; dogNear: boolean; busy: boolean };
+  state: { hasBall: boolean; hasTreat: boolean; ballInPlay: boolean; dogNear: boolean };
   counts: { ball: number; treat: number };
-  spies: Record<
-    'pet' | 'feed' | 'throwBall' | 'reward' | 'cue' | 'performTrick' | 'teach',
-    ReturnType<typeof vi.fn>
-  >;
+  spies: Record<'pet' | 'feed' | 'throwBall' | 'reward' | 'cue', ReturnType<typeof vi.fn>>;
   clock: { t: number };
-  tricks: Array<{ id: string; name: string }>;
 };
 
 function setup(overrides: Partial<DockDeps> = {}): { harness: Harness; deps: DockDeps } {
-  const state = { hasBall: true, hasTreat: true, ballInPlay: false, dogNear: true, busy: false };
+  const state = { hasBall: true, hasTreat: true, ballInPlay: false, dogNear: true };
   const counts = { ball: 0, treat: 0 };
   const clock = { t: 0 };
-  const tricks: Array<{ id: string; name: string }> = [];
   const spies = {
     pet: vi.fn(),
     feed: vi.fn(),
     throwBall: vi.fn(),
     reward: vi.fn(),
     cue: vi.fn(),
-    performTrick: vi.fn(),
-    teach: vi.fn(),
   };
   const ctx: GameActionContext = {
     get hasBall() {
@@ -43,9 +36,6 @@ function setup(overrides: Partial<DockDeps> = {}): { harness: Harness; deps: Doc
     get dogNear() {
       return state.dogNear;
     },
-    get busy() {
-      return state.busy;
-    },
     ...spies,
   };
   const host = document.createElement('div');
@@ -54,34 +44,35 @@ function setup(overrides: Partial<DockDeps> = {}): { harness: Harness; deps: Doc
     registry: createGameRegistry(),
     context: () => ctx,
     now: () => clock.t,
-    tricks: () => tricks,
     counts: () => counts,
     ...overrides,
   };
-  return { harness: { host, ctx, state, counts, spies, clock, tricks }, deps };
+  return { harness: { host, ctx, state, counts, spies, clock }, deps };
 }
 
 beforeEach(() => {
   document.body.replaceChildren();
 });
 
-describe('ActionDock — always visible', () => {
-  it('mounts the primary + every command chip, with no toggle to hide them', () => {
+describe('ActionDock - human actions, always visible', () => {
+  it('mounts every human command chip and nothing the dog does', () => {
     const { harness, deps } = setup();
     createActionDock(harness.host, deps);
-    expect(harness.host.querySelector('#action')).toBeTruthy();
-    expect(harness.host.querySelector('#dock-toggle')).toBeNull();
+    expect(harness.host.querySelector('#action')).toBeNull(); // no contextual primary
+    expect(harness.host.querySelector('#dock-toggle')).toBeNull(); // no toggle
     const ids = [...harness.host.querySelectorAll('.dock-chip')].map((c) =>
       c.getAttribute('data-cmd'),
     );
-    expect(ids).toEqual(['pet', 'feed', 'throw', 'clap', 'whistle', 'reward', 'teach']);
+    expect(ids).toEqual(['clap', 'whistle', 'point', 'snap', 'reward', 'feed', 'pet', 'throw']);
+    // No dog-action / trick chips exist.
+    expect(harness.host.querySelector('[data-cmd^="trick:"]')).toBeNull();
   });
 
-  it('runs a command on tap without opening anything', () => {
+  it('runs a command on tap', () => {
     const { harness, deps } = setup();
     createActionDock(harness.host, deps);
-    harness.host.querySelector<HTMLButtonElement>('[data-cmd="pet"]')!.click();
-    expect(harness.spies.pet).toHaveBeenCalledOnce();
+    harness.host.querySelector<HTMLButtonElement>('[data-cmd="clap"]')!.click();
+    expect(harness.spies.cue).toHaveBeenCalledWith('clap');
   });
 
   it('dims invalid commands and refuses their taps', () => {
@@ -111,7 +102,7 @@ describe('ActionDock — always visible', () => {
     expect(harness.spies.reward).toHaveBeenCalledTimes(2);
   });
 
-  it('surfaces inventory as badges on Throw (balls) and Feed (treats)', () => {
+  it('surfaces inventory as badges on Throw (balls) and Treat (treats)', () => {
     const { harness, deps } = setup();
     const dock = createActionDock(harness.host, deps);
     harness.counts.ball = 3;
@@ -124,35 +115,15 @@ describe('ActionDock — always visible', () => {
     expect(feedBadge.hidden).toBe(true);
   });
 
-  it('reflects and fires the contextual primary', () => {
+  it('tags chips by group so cues and rewards read distinctly', () => {
     const { harness, deps } = setup();
-    const dock = createActionDock(harness.host, deps);
-    const onPrimary = vi.fn();
-    dock.onPrimary(onPrimary);
-    dock.setPrimary('🎾', 'Throw', true);
-    const action = harness.host.querySelector<HTMLButtonElement>('#action')!;
-    expect(action.querySelector('.action-ico')!.textContent).toBe('🎾');
-    expect(action.querySelector('.action-lbl')!.textContent).toBe('Throw');
-    dock.setPrimary('⏳', '...', false);
-    expect(action.classList.contains('is-off')).toBe(true);
-    action.click();
-    expect(onPrimary).toHaveBeenCalledOnce();
-  });
-
-  it('renders dynamic trick chips and runs them, blocking while busy', () => {
-    const { harness, deps } = setup();
-    const dock = createActionDock(harness.host, deps);
-    harness.tricks.push({ id: 'salto', name: 'Salto' });
-    dock.refreshTricks();
-    const salto = harness.host.querySelector<HTMLButtonElement>('[data-cmd="trick:salto"]')!;
-    expect(salto.querySelector('.dock-lbl')!.textContent).toBe('Salto');
-    salto.click();
-    expect(harness.spies.performTrick).toHaveBeenCalledWith('salto');
-
-    harness.clock.t = 400; // past the trick's tap cooldown
-    harness.state.busy = true;
-    dock.sync();
-    expect(salto.classList.contains('is-disabled')).toBe(true);
+    createActionDock(harness.host, deps);
+    expect(
+      harness.host.querySelector('[data-cmd="clap"]')!.getAttribute('data-group'),
+    ).toBe('cue');
+    expect(
+      harness.host.querySelector('[data-cmd="reward"]')!.getAttribute('data-group'),
+    ).toBe('reward');
   });
 
   it('stops pointer events from reaching the world', () => {

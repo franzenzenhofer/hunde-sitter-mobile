@@ -1,7 +1,12 @@
 import type { Association } from './learning';
 
 /** Cue id → the glyph shown in the panel (mirrors the dock command icons). */
-const GESTURE_ICON: Record<string, string> = { clap: '👏', whistle: '😙' };
+const GESTURE_ICON: Record<string, string> = {
+  clap: '👏',
+  whistle: '😙',
+  point: '👉',
+  snap: '🫰',
+};
 const LEARNED_THRESHOLD = 0.05;
 
 export type VocabAssoc = { gesture: string; trick: string; strength: number };
@@ -43,12 +48,13 @@ export function createVocabPanel(): VocabPanel {
   el.id = 'vocab';
   el.style.cssText = [
     'position:absolute',
-    'top:calc(170px + env(safe-area-inset-top))',
-    'right:calc(12px + env(safe-area-inset-right))',
-    'min-width:140px',
-    'max-width:200px',
-    'padding:6px 10px',
-    'background:rgba(255,255,255,0.55)',
+    'top:calc(10px + env(safe-area-inset-top))',
+    'left:50%',
+    'transform:translateX(-50%)',
+    'min-width:120px',
+    'max-width:240px',
+    'padding:5px 10px',
+    'background:rgba(255,255,255,0.5)',
     'border-radius:10px',
     'font:600 11px -apple-system,sans-serif',
     'color:#2a2a2a',

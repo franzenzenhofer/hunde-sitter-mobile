@@ -17,13 +17,8 @@ import { createJoystick } from './input/joystick';
 import { createCameraDrag } from './input/camera-drag';
 import { createKeyboard } from './input/keyboard';
 import { createActionDock } from './ui/action-dock';
-import { createGameRegistry, type GameActionContext } from './actions/game-commands';
-import { createTrickComposer } from './ui/trick-composer';
-import { runProgram } from './training/interpreter';
-import { createHud } from './ui/hud';
+import { createGameRegistry, type CueId, type GameActionContext } from './actions/game-commands';
 import { createActiveQuests } from './quests/active';
-import { createQuestBanner } from './quests/banner';
-import { grantReward } from './quests/rewards';
 import { createAudioBus } from './audio/context';
 import { playSfx } from './audio/sfx';
 import { createMuteButton } from './audio/mute-button';
@@ -42,24 +37,6 @@ import { createTrainingEngine } from './training/engine';
 import { seedTricks } from './training/seed-tricks';
 import { createVocabPanel } from './training/vocab-panel';
 import type { WorldContext } from './training/types';
-
-const ACTION_LABEL: Record<ActionKind, string> = {
-  'pickup-ball': 'Pick',
-  'pickup-treat': 'Pick',
-  throw: 'Throw',
-  feed: 'Feed',
-  pet: 'Pet',
-  wait: '...',
-};
-
-const PRIMARY_ICON: Record<ActionKind, string> = {
-  'pickup-ball': '🫳',
-  'pickup-treat': '🫳',
-  throw: '🎾',
-  feed: '🍖',
-  pet: '❤️',
-  wait: '⏳',
-};
 
 const ACTION_NEAR_DOG = 2.6;
 
@@ -88,13 +65,11 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
 
   const cam = createFollowCamera(ctx.camera, player.group);
   const fps = import.meta.env.DEV ? createFpsCounter(ui) : null;
-  const hud = createHud(ui);
 
   const joystick = createJoystick(ui);
   const drag = createCameraDrag();
   const keyboard = createKeyboard();
   const quests = createActiveQuests(seed);
-  const banner = createQuestBanner(ui);
 
   const audio = createAudioBus();
   createMuteButton(ui, audio);
@@ -124,14 +99,12 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
     now: () => Date.now(),
   };
 
-  on('gesture:clap', () => {
-    void engine.presentCue('clap', worldCtx);
-    engine.observeGesture('clap');
-  });
-  on('gesture:whistle', () => {
-    void engine.presentCue('whistle', worldCtx);
-    engine.observeGesture('whistle');
-  });
+  // A human cue: the dog's AI picks a behaviour to offer (random at first,
+  // shaped by reward over time) and performs it. presentCue logs the gesture,
+  // so reward can later pair it with whatever Bello just did.
+  const cueGesture = (id: string): void => {
+    void engine.presentCue(id, worldCtx).then(() => refreshVocab());
+  };
   on('training:reward', ({ strength }) => {
     engine.recordReward(strength);
     refreshVocab();
@@ -154,24 +127,13 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
   };
   keyboard.onAction(doAction);
 
-  // Explicit command palette: every care/play/train action the player can pick,
-  // wired straight to real game effects. This is the full repertoire the single
-  // contextual button could never expose.
-  let trickBusy = false;
-  const performTrick = (id: string): void => {
-    if (trickBusy) return;
-    trickBusy = true;
-    void engine.runTrick(id, worldCtx).then((res) => {
-      trickBusy = false;
-      emit('training:trick-executed', { trickId: id, success: res.success });
-    });
-  };
+  // The human action deck: only what the trainer can do (cues + rewards + play).
+  // The dog is never driven by a button - it reacts to cues with its own AI.
   const gameCtx = (): GameActionContext => ({
     hasBall: bag.count('ball') > 0,
     hasTreat: bag.count('treat') > 0,
     ballInPlay: ball.mode !== 'idle',
     dogNear: player.group.position.distanceTo(dog.group.position) <= ACTION_NEAR_DOG,
-    busy: trickBusy,
     pet: () => act('pet'),
     feed: () => {
       act('feed');
@@ -182,64 +144,19 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
       lastPickedUp = null;
     },
     reward: (strength) => emit('training:reward', { strength }),
-    cue: (gid) => {
-      if (gid === 'clap') emit('gesture:clap', {});
-      else emit('gesture:whistle', {});
-    },
-    performTrick,
-    teach: () => composer.open(),
+    cue: (id: CueId) => cueGesture(id),
   });
   const dock = createActionDock(ui, {
     registry: createGameRegistry(),
     context: gameCtx,
     now: () => performance.now(),
-    tricks: () => Object.values(engine.state.tricks).map((t) => ({ id: t.id, name: t.name })),
     counts: () => ({ ball: bag.count('ball'), treat: bag.count('treat') }),
-  });
-  dock.onPrimary(doAction);
-  dock.refreshTricks();
-  setInterval(() => dock.refreshTricks(), 2000);
-
-  // The Trick Composer: author a program, bind a cue, save it as a real trick.
-  const composer = createTrickComposer(ui, {
-    onSave: (trick) => {
-      engine.registerTrick(trick);
-      if (trick.cueGestureId) {
-        // Give the player's chosen cue a strong head start so it works at once;
-        // reinforcement can push it the rest of the way.
-        const row = (engine.state.vocabulary[trick.cueGestureId] ??= {});
-        row[trick.id] = { strength: 0.7, reinforcements: 1, lastReinforcedAt: Date.now() };
-      }
-      dock.refreshTricks();
-      refreshVocab();
-      toast.show(`Bello learned “${trick.name}”`);
-    },
-    onTest: (program) => {
-      if (trickBusy) return;
-      trickBusy = true;
-      void runProgram(program, worldCtx, engine.state.memory, new AbortController().signal).finally(
-        () => {
-          trickBusy = false;
-        },
-      );
-    },
-    playerTricks: () =>
-      Object.values(engine.state.tricks)
-        .filter((t) => t.authoredBy === 'player')
-        .map((t) => ({ id: t.id, name: t.name })),
-    onDelete: (id) => {
-      delete engine.state.tricks[id];
-      dock.refreshTricks();
-      refreshVocab();
-    },
   });
 
   let completedCount = 0;
   on('quest:complete', () => {
     completedCount++;
-    grantReward(dog.stats);
     playSfx(audio, 'complete');
-    banner.update(quests.current);
   });
 
   await maybeMigrateLegacyIdb();
@@ -248,10 +165,8 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
     restoreState(restored, { player, dog, quests });
     completedCount = restored.completedQuests;
   }
-  banner.update(quests.current);
 
   if (restored?.tricks) for (const t of Object.values(restored.tricks)) engine.registerTrick(t);
-  dock.refreshTricks();
   if (restored?.vocabulary) Object.assign(engine.state.vocabulary, restored.vocabulary);
   if (restored?.memoryCells) {
     for (const [k, v] of Object.entries(restored.memoryCells)) {
@@ -285,14 +200,16 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
     worldCtx,
     pet: doAction,
     doAction,
+    cue: cueGesture,
   });
 
   const loop = createLoop();
   const moveInput = new Vector2();
   loop.add((dt) => {
-    const { dx, dy } = drag.consume();
-    cam.yaw -= dx;
+    const { dx, dy, zoom, twist } = drag.consume();
+    cam.yaw -= dx - twist;
     cam.pitch -= dy;
+    cam.distance -= zoom;
     moveInput.copy(joystick.value);
     if (moveInput.lengthSq() < 0.0025) moveInput.copy(keyboard.value);
     player.move(moveInput, cam.yaw, dt);
@@ -344,11 +261,7 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
     player.animate(dt);
     dog.animate(dt);
     quests.walkProgress(player.group.position);
-    banner.update(quests.current);
-    const kind = resolveAction(player.group.position, dog.group.position, ball, bag, lastPickedUp);
-    dock.setPrimary(PRIMARY_ICON[kind], ACTION_LABEL[kind], kind !== 'wait');
     dock.sync();
-    hud.update(dog.stats);
     particles.update(ctx.scene, dt);
     butterflies.update(dt, player.group.position);
     sun.update(dt, player.group.position);

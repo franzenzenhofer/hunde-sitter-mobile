@@ -1,18 +1,15 @@
 /**
- * The Action Dock — the player's whole interface to the dog.
+ * The Action Dock - the human's whole interface to training Bello.
  *
- * Principle: everything the player can do is *always visible*. There is no
- * open/close — the full repertoire (care, play, cues, reward, every trick,
- * teach) sits on screen at all times, lit when available and dimmed when not,
- * so the range is seen rather than discovered. A big contextual PRIMARY button
- * emphasises the single smartest action for one-thumb play; inventory counts
- * ride as badges on the relevant chips, so nothing needs its own widget.
+ * Principle: everything the *human* can do is always on screen. There are no
+ * dog-action buttons (the dog decides what to do) and no editor. The deck is
+ * just the human's cues and rewards, lit when usable and dimmed when not, so
+ * the player's full range is seen rather than discovered.
  *
- * The surface is a pure render of (registry, context): add a Command or teach a
- * trick and it simply appears.
+ * The surface is a pure render of (registry, context): add a Command and it
+ * simply appears.
  */
 import type { GameActionContext, GameCommand, GameRegistry } from '../actions/game-commands';
-import { makeTrickCommand } from '../actions/game-commands';
 import { button, injectStyleOnce, vibrate } from './dom';
 
 export type DockDeps = {
@@ -21,20 +18,14 @@ export type DockDeps = {
   context: () => GameActionContext;
   /** Monotonic clock in ms (cooldowns use the same source as execute). */
   now: () => number;
-  /** Current known tricks, in display order. */
-  tricks: () => Array<{ id: string; name: string }>;
-  /** Carried inventory, surfaced as badges on the Throw / Feed chips. */
+  /** Carried inventory, surfaced as badges on the Throw / Treat chips. */
   counts: () => { ball: number; treat: number };
 };
 
 export type ActionDock = {
   el: HTMLDivElement;
-  setPrimary(icon: string, label: string, enabled: boolean): void;
-  onPrimary(cb: () => void): () => void;
   /** Refresh availability + cooldown + badge visuals; call once per frame. */
   sync(): void;
-  /** Rebuild the dynamic trick chips from deps.tricks(). */
-  refreshTricks(): void;
   destroy(): void;
 };
 
@@ -52,21 +43,18 @@ export function createActionDock(host: HTMLElement, deps: DockDeps): ActionDock 
   // listeners, so using the UI never moves the world.
   el.addEventListener('pointerdown', (e) => e.stopPropagation());
 
-  // The always-visible chip rail: every command, in registration order.
   const rail = document.createElement('div');
   rail.id = 'dock-rail';
   rail.setAttribute('role', 'group');
-  rail.setAttribute('aria-label', 'Dog commands');
+  rail.setAttribute('aria-label', 'Trainer actions');
 
-  const staticChips: Chip[] = [];
-  let trickChips: Chip[] = [];
-  const allChips = (): Chip[] => [...staticChips, ...trickChips];
+  const chips: Chip[] = [];
 
   const runCmd = (cmd: GameCommand): void => {
     const ok = cmd.execute(deps.context(), null, deps.now());
     if (ok) {
       vibrate(12);
-      flash(allChips(), cmd.id);
+      flash(chips, cmd.id);
     }
     api.sync();
   };
@@ -74,11 +62,12 @@ export function createActionDock(host: HTMLElement, deps: DockDeps): ActionDock 
   const buildChip = (cmd: GameCommand): Chip => {
     const btn = button({
       className: 'dock-chip',
-      ariaLabel: `${cmd.label}${cmd.hint ? ` — ${cmd.hint}` : ''}`,
+      ariaLabel: `${cmd.label}${cmd.hint ? ` - ${cmd.hint}` : ''}`,
       title: cmd.hint,
       onClick: () => runCmd(cmd),
     });
     btn.dataset.cmd = cmd.id;
+    btn.dataset.group = cmd.group;
 
     const ring = document.createElement('div');
     ring.className = 'dock-ring';
@@ -97,28 +86,11 @@ export function createActionDock(host: HTMLElement, deps: DockDeps): ActionDock 
 
   for (const cmd of deps.registry.all()) {
     const chip = buildChip(cmd);
-    staticChips.push(chip);
+    chips.push(chip);
     rail.appendChild(chip.el);
   }
 
-  // --- the emphasised contextual primary -------------------------------------
-  const primaryHandlers = new Set<() => void>();
-  const primary = button({
-    onClick: () => {
-      for (const h of primaryHandlers) h();
-      vibrate(12);
-    },
-  });
-  primary.id = 'action';
-  const primaryIcon = document.createElement('span');
-  primaryIcon.className = 'action-ico';
-  primaryIcon.textContent = '🐾';
-  const primaryLabel = document.createElement('span');
-  primaryLabel.className = 'action-lbl';
-  primaryLabel.textContent = 'Act';
-  primary.append(primaryIcon, primaryLabel);
-
-  el.append(rail, primary);
+  el.append(rail);
   host.appendChild(el);
 
   const setBadge = (chip: Chip, n: number): void => {
@@ -132,20 +104,11 @@ export function createActionDock(host: HTMLElement, deps: DockDeps): ActionDock 
 
   const api: ActionDock = {
     el,
-    setPrimary(icon, label, enabled) {
-      primaryIcon.textContent = icon;
-      primaryLabel.textContent = label;
-      primary.classList.toggle('is-off', !enabled);
-    },
-    onPrimary(cb) {
-      primaryHandlers.add(cb);
-      return () => primaryHandlers.delete(cb);
-    },
     sync() {
       const ctx = deps.context();
       const now = deps.now();
       const counts = deps.counts();
-      for (const chip of allChips()) {
+      for (const chip of chips) {
         const { cmd, el: btn, ring } = chip;
         const ready = cmd.isReady(now);
         const valid = cmd.canExecute(ctx, now);
@@ -160,21 +123,6 @@ export function createActionDock(host: HTMLElement, deps: DockDeps): ActionDock 
         const resource = BADGE_OF[cmd.id];
         if (resource) setBadge(chip, counts[resource]);
       }
-    },
-    refreshTricks() {
-      const want = deps.tricks();
-      const unchanged =
-        want.length === trickChips.length &&
-        want.every((t, i) => trickChips[i]?.cmd.id === `trick:${t.id}`);
-      if (unchanged) return; // avoid needless DOM churn on the polling interval
-      for (const c of trickChips) c.el.remove();
-      trickChips = [];
-      for (const t of want) {
-        const chip = buildChip(makeTrickCommand(t));
-        trickChips.push(chip);
-        rail.appendChild(chip.el);
-      }
-      api.sync();
     },
     destroy() {
       el.remove();
@@ -199,49 +147,37 @@ const DOCK_CSS = `
 
 #dock-rail {
   position: absolute;
-  right: calc(20px + env(safe-area-inset-right));
-  bottom: calc(140px + env(safe-area-inset-bottom));
-  width: min(300px, calc(100vw - 100px));
-  display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; align-content: flex-end;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  max-width: min(560px, calc(100vw - 24px));
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: flex-end;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.30);
+  border-radius: 18px;
+  backdrop-filter: blur(6px);
 }
-
-#action {
-  position: absolute;
-  right: calc(20px + env(safe-area-inset-right));
-  bottom: calc(28px + env(safe-area-inset-bottom));
-  width: 92px; height: 92px; border-radius: 50%;
-  background: linear-gradient(180deg, #ffd86b, #ff9a5a);
-  border: 3px solid #fff; color: #2a2a2a; cursor: pointer;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.22);
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
-  touch-action: manipulation; transition: transform 90ms ease, filter 160ms ease, opacity 160ms ease;
-}
-#action:active { transform: translateY(2px) scale(0.97); }
-#action .action-ico { font-size: 29px; line-height: 1; }
-#action .action-lbl {
-  font: 800 12px -apple-system, BlinkMacSystemFont, sans-serif;
-  letter-spacing: 0.04em; text-transform: uppercase;
-}
-#action.is-off { filter: grayscale(0.7); opacity: 0.72; }
 
 .dock-chip {
-  position: relative; width: 54px; height: 54px; flex: 0 0 auto;
-  border: none; border-radius: 13px; cursor: pointer;
-  background: rgba(255,255,255,0.82);
+  position: relative; width: 58px; height: 58px; flex: 0 0 auto;
+  border: none; border-radius: 14px; cursor: pointer;
+  background: rgba(255,255,255,0.88);
   box-shadow: 0 2px 6px rgba(0,0,0,0.14);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   transition: transform 90ms ease, opacity 160ms ease, filter 160ms ease;
 }
+/* Cues read as the "say something" group; rewards as the "good dog" group. */
+.dock-chip[data-group="cue"] { background: rgba(214,233,255,0.92); }
+.dock-chip[data-group="reward"] { background: rgba(255,233,209,0.92); }
 .dock-chip:active { transform: scale(0.92); }
-.dock-chip .dock-ico { font-size: 22px; line-height: 1; }
+.dock-chip .dock-ico { font-size: 24px; line-height: 1; }
 .dock-chip .dock-lbl {
   font: 700 9px -apple-system, sans-serif; color: #2a2a2a;
-  max-width: 50px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 54px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .dock-chip.is-disabled { opacity: 0.34; filter: grayscale(0.85); pointer-events: none; }
 .dock-chip.is-cooling { pointer-events: none; }
 .dock-ring {
-  position: absolute; inset: 0; border-radius: 13px; opacity: 0;
+  position: absolute; inset: 0; border-radius: 14px; opacity: 0;
   -webkit-mask: radial-gradient(transparent 62%, #000 64%);
   mask: radial-gradient(transparent 62%, #000 64%);
   transition: opacity 120ms ease;
