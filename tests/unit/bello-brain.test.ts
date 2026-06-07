@@ -27,9 +27,9 @@ describe('parseChoice', () => {
       thought: 'weee',
     });
   });
-  it('falls back to the first action when the action is invalid or JSON is broken', () => {
-    expect(parseChoice('{"action":"fly"}', ['sit', 'spin']).action).toBe('sit');
-    expect(parseChoice('not json', ['sit', 'spin']).action).toBe('sit');
+  it('throws (no fallback) when the action is invalid or JSON is broken', () => {
+    expect(() => parseChoice('{"action":"fly"}', ['sit', 'spin'])).toThrow(/invalid action/);
+    expect(() => parseChoice('not json', ['sit', 'spin'])).toThrow(/non-JSON/);
   });
 });
 

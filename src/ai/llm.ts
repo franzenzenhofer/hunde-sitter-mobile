@@ -28,6 +28,9 @@ const MODEL = {
 // small window is plenty and keeps Bello stable on phones.
 const N_CTX = 512;
 const MAX_TOKENS = 48;
+// A single decision must finish in this long or we abort and surface a timeout
+// rather than letting a stuck WASM inference freeze the dog forever.
+const CHOOSE_TIMEOUT_MS = 30_000;
 // wllama's WASM blob, served from the jsdelivr CDN (matches the installed
 // version). Inlined to avoid bundling the WASM into our app.
 const WASM_CONFIG = {
@@ -61,32 +64,41 @@ export function createWllamaEngine(): LlmEngine {
     actions: string[];
   }): Promise<LlmChoice> => {
     if (!wllama) throw new Error('Bello brain not loaded yet');
-    const res = (await wllama.createChatCompletion({
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-      max_tokens: MAX_TOKENS,
-      temperature: 0.9,
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'bello_action',
-          strict: true,
-          schema: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              thought: { type: 'string' },
-              action: { type: 'string', enum: actions },
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), CHOOSE_TIMEOUT_MS);
+    try {
+      const res = (await wllama.createChatCompletion({
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        max_tokens: MAX_TOKENS,
+        temperature: 0.9,
+        // Reuse the cached system-prompt KV across calls — faster, less work.
+        cache_prompt: true,
+        abortSignal: ctrl.signal,
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'bello_action',
+            strict: true,
+            schema: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                thought: { type: 'string' },
+                action: { type: 'string', enum: actions },
+              },
+              required: ['action', 'thought'],
             },
-            required: ['action', 'thought'],
           },
         },
-      },
-    })) as { choices?: Array<{ message?: { content?: string } }> };
-    const content = res.choices?.[0]?.message?.content ?? '{}';
-    return parseChoice(content, actions);
+      })) as { choices?: Array<{ message?: { content?: string } }> };
+      const content = res.choices?.[0]?.message?.content ?? '';
+      return parseChoice(content, actions);
+    } finally {
+      clearTimeout(timer);
+    }
   };
 
   // Serialise inference: concurrent createChatCompletion calls on one wllama
@@ -110,13 +122,22 @@ export function createWllamaEngine(): LlmEngine {
   };
 }
 
-/** Parse the model's JSON; the grammar guarantees a valid `action` enum value. */
+/**
+ * Parse the model's JSON. No fallback: if the output isn't valid JSON with an
+ * allowed `action`, we throw so the failure is surfaced (the json_schema grammar
+ * should guarantee validity, so a throw here means something is genuinely wrong).
+ */
 export function parseChoice(content: string, actions: string[]): LlmChoice {
+  let obj: Partial<LlmChoice>;
   try {
-    const obj = JSON.parse(content) as Partial<LlmChoice>;
-    const action = obj.action && actions.includes(obj.action) ? obj.action : actions[0]!;
-    return { action, thought: typeof obj.thought === 'string' ? obj.thought : '' };
+    obj = JSON.parse(content) as Partial<LlmChoice>;
   } catch {
-    return { action: actions[0]!, thought: '' };
+    throw new Error(`Bello returned non-JSON output: ${JSON.stringify(content.slice(0, 200))}`);
   }
+  if (typeof obj.action !== 'string' || !actions.includes(obj.action)) {
+    throw new Error(
+      `Bello chose an invalid action ${JSON.stringify(obj.action)} — allowed: ${actions.join(', ')}`,
+    );
+  }
+  return { action: obj.action, thought: typeof obj.thought === 'string' ? obj.thought : '' };
 }
