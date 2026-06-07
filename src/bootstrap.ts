@@ -28,7 +28,7 @@ import { snapshot, restoreState } from './persistence/snapshot';
 import { createParticles } from './render/particles';
 import { createToast } from './ui/toast';
 import { maybeShowOnboarding } from './ui/onboarding';
-import { BIOMES } from './world/biomes';
+import { BIOMES, resolveBiome } from './world/biomes';
 import { installTestHooks } from './dev/test-hooks';
 import { addButterflies } from './world/butterflies';
 import { createDebugOverlay } from './ui/debug-overlay';
@@ -113,9 +113,15 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
     .then(() => brainStatus.setReady())
     .catch(() => brainStatus.setError());
 
+  const placeNow = (): string => {
+    const { x, z } = dog.group.position;
+    const id = resolveBiome(streamer.noise.temperature(x, z), streamer.noise.moisture(x, z)).id;
+    return BIOMES[id as keyof typeof BIOMES]?.name ?? id;
+  };
   const situationNow = (): Situation => ({
     ballVisible: ball.mode === 'flying' || ball.mode === 'dropped',
     playerNear: player.group.position.distanceTo(dog.group.position) <= ACTION_NEAR_DOG,
+    place: placeNow(),
   });
   const actionsNow = (): ActionDef[] =>
     Object.values(engine.state.tricks).map((t) => ({ id: t.id, name: t.name }));

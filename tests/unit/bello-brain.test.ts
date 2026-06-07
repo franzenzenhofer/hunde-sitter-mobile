@@ -35,16 +35,18 @@ describe('parseChoice', () => {
 
 describe('describeSituation', () => {
   it('reads the world for the prompt', () => {
-    expect(describeSituation({ playerNear: true, ballVisible: true })).toBe(
-      'trainer is close, a ball is out',
+    expect(describeSituation({ playerNear: true, ballVisible: true, place: 'Meadow' })).toBe(
+      'in the meadow, trainer is close, a ball is out',
     );
-    expect(describeSituation({ playerNear: false, ballVisible: false })).toBe('trainer is far');
+    expect(describeSituation({ playerNear: false, ballVisible: false, place: 'Forest' })).toBe(
+      'in the forest, trainer is far',
+    );
   });
 });
 
 describe('buildUserPrompt', () => {
   it('explains there are no memories yet, then includes the cue', () => {
-    const p = buildUserPrompt('clap', { playerNear: true, ballVisible: false }, [], ACTIONS);
+    const p = buildUserPrompt('clap', { playerNear: true, ballVisible: false, place: 'Meadow' }, [], ACTIONS);
     expect(p).toContain('no memories yet');
     expect(p).toContain('"clap"');
     expect(p).toContain('sit, spin, bark');
@@ -54,7 +56,7 @@ describe('buildUserPrompt', () => {
       { cue: 'clap', situation: 'trainer is close', action: 'sit', reward: 1 },
       { cue: 'whistle', situation: 'trainer is far', action: 'spin', reward: 0 },
     ];
-    const p = buildUserPrompt('clap', { playerNear: true, ballVisible: false }, history, ACTIONS);
+    const p = buildUserPrompt('clap', { playerNear: true, ballVisible: false, place: 'Meadow' }, history, ACTIONS);
     expect(p).toContain('clap -> sit -> rewarded 1');
     expect(p).toContain('whistle -> spin -> ignored');
   });
@@ -65,7 +67,7 @@ describe('createBelloBrain', () => {
     const brain = createBelloBrain(fakeEngine({ action: 'spin', thought: 'I love spinning' }));
     const choice = await brain.decide({
       cue: 'clap',
-      situation: { playerNear: true, ballVisible: false },
+      situation: { playerNear: true, ballVisible: false, place: 'Meadow' },
       actions: ACTIONS,
     });
     expect(choice.action).toBe('spin');
@@ -77,7 +79,7 @@ describe('createBelloBrain', () => {
   it('reward attaches to the latest memory so it shapes later context', () => {
     const brain = createBelloBrain(fakeEngine({ action: 'sit', thought: '' }));
     return brain
-      .decide({ cue: 'clap', situation: { playerNear: true, ballVisible: false }, actions: ACTIONS })
+      .decide({ cue: 'clap', situation: { playerNear: true, ballVisible: false, place: 'Meadow' }, actions: ACTIONS })
       .then(() => {
         brain.reward(1);
         expect(brain.history[0]!.reward).toBe(1);
@@ -95,7 +97,7 @@ describe('createBelloBrain', () => {
       },
     };
     const brain = createBelloBrain(engine);
-    const sit = { cue: 'clap', situation: { playerNear: true, ballVisible: false }, actions: ACTIONS };
+    const sit = { cue: 'clap', situation: { playerNear: true, ballVisible: false, place: 'Meadow' }, actions: ACTIONS };
     await brain.decide(sit); // picks 'sit'
     await brain.decide(sit); // must NOT be allowed to pick 'sit' again
     expect(offered[0]).toEqual(['sit', 'spin', 'bark']);
@@ -108,7 +110,7 @@ describe('createBelloBrain', () => {
     const brain = createBelloBrain(fakeEngine({ action: 'sit', thought: '' }, spy));
     await brain.decide({
       cue: 'clap',
-      situation: { playerNear: true, ballVisible: false },
+      situation: { playerNear: true, ballVisible: false, place: 'Meadow' },
       actions: ACTIONS,
     });
     expect(spy).toHaveBeenCalledOnce();

@@ -15,6 +15,8 @@ export type ActionDef = { id: string; name: string };
 export type Situation = {
   ballVisible: boolean;
   playerNear: boolean;
+  /** The biome Bello is standing in (e.g. "Meadow", "Forest") - he reacts to it. */
+  place: string;
 };
 
 export type Episode = {
@@ -77,6 +79,7 @@ export function createBelloBrain(engine: LlmEngine): BelloBrain {
 
 export function describeSituation(s: Situation): string {
   const parts: string[] = [];
+  parts.push(`in the ${s.place.toLowerCase()}`);
   parts.push(s.playerNear ? 'trainer is close' : 'trainer is far');
   if (s.ballVisible) parts.push('a ball is out');
   return parts.join(', ');
