@@ -83,6 +83,7 @@ src/
 
 ## Deploy
 
-Pushing to `main` runs lint + tests + build and publishes to GitHub Pages
-(`.github/workflows/deploy.yml`). Pull requests run the same checks but never
-deploy.
+Pushing to `main` runs lint + tests + build and publishes to Cloudflare Pages
+(project `hundesitter`, live at https://hundesitter.franzai.com) via
+`.github/workflows/deploy.yml`. The custom domain is configured on the
+Cloudflare Pages project.
