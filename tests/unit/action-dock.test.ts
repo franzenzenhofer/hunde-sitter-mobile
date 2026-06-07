@@ -126,6 +126,19 @@ describe('ActionDock - human actions, always visible', () => {
     ).toBe('reward');
   });
 
+  it('reports the fired command id via onFire (for sound + animation)', () => {
+    const onFire = vi.fn();
+    const { harness, deps } = setup({ onFire });
+    createActionDock(harness.host, deps);
+    harness.host.querySelector<HTMLButtonElement>('[data-cmd="clap"]')!.click();
+    expect(onFire).toHaveBeenCalledWith('clap');
+    // A blocked command (no ball -> throw invalid) must NOT fire.
+    harness.state.hasBall = false;
+    onFire.mockClear();
+    harness.host.querySelector<HTMLButtonElement>('[data-cmd="throw"]')!.click();
+    expect(onFire).not.toHaveBeenCalled();
+  });
+
   it('stops pointer events from reaching the world', () => {
     const { harness, deps } = setup();
     createActionDock(harness.host, deps);

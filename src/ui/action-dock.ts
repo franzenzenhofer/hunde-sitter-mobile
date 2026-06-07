@@ -20,6 +20,8 @@ export type DockDeps = {
   now: () => number;
   /** Carried inventory, surfaced as badges on the Throw / Treat chips. */
   counts: () => { ball: number; treat: number };
+  /** Called with a command id when it successfully fires (for sound + animation). */
+  onFire?: (id: string) => void;
 };
 
 export type ActionDock = {
@@ -55,6 +57,7 @@ export function createActionDock(host: HTMLElement, deps: DockDeps): ActionDock 
     if (ok) {
       vibrate(12);
       flash(chips, cmd.id);
+      deps.onFire?.(cmd.id);
     }
     api.sync();
   };

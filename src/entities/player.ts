@@ -7,16 +7,20 @@ export type Player = {
   speed: number;
   move(input: Vector2, cameraYaw: number, dt: number): void;
   animate(dt: number): void;
+  /** Play a short raise-and-wave - the trainer signalling the dog. */
+  gesture(): void;
 };
 
 const SPEED = 4.5;
 const TURN = 10;
 const SWING = 1.0;
+const GESTURE_DUR = 0.55;
 
 export function createPlayer(): Player {
   const mesh = buildPlayerMesh();
   const velocity = new Vector3();
   let walkPhase = 0;
+  let gestureT = 0;
 
   const state: Player = {
     group: mesh.group,
@@ -53,6 +57,18 @@ export function createPlayer(): Player {
       mesh.rightLeg.rotation.x = -s * 0.7;
       mesh.leftArm.rotation.x = -s * 0.5;
       mesh.rightArm.rotation.x = s * 0.5;
+      // A signalling gesture overrides the right arm: raise it and wave.
+      if (gestureT > 0) {
+        gestureT = Math.max(0, gestureT - dt);
+        const p = 1 - gestureT / GESTURE_DUR; // 0 -> 1 over the gesture
+        mesh.rightArm.rotation.x = -2.4;
+        mesh.rightArm.rotation.z = Math.sin(p * Math.PI * 6) * 0.5;
+      } else {
+        mesh.rightArm.rotation.z = 0;
+      }
+    },
+    gesture: () => {
+      gestureT = GESTURE_DUR;
     },
   };
   return state;

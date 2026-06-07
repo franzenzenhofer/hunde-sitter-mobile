@@ -1,6 +1,17 @@
 import type { AudioBus } from './context';
 
-export type SfxName = 'bark' | 'eat' | 'pet' | 'throw' | 'complete' | 'biome';
+export type SfxName =
+  | 'bark'
+  | 'eat'
+  | 'pet'
+  | 'throw'
+  | 'complete'
+  | 'biome'
+  | 'clap'
+  | 'whistle'
+  | 'point'
+  | 'snap'
+  | 'good';
 
 export function playSfx(bus: AudioBus, name: SfxName): void {
   const { ctx, master } = bus;
@@ -12,6 +23,12 @@ export function playSfx(bus: AudioBus, name: SfxName): void {
   if (name === 'throw') return tone(ctx, master, t, 380, 180, 0.18);
   if (name === 'complete') return arpeggio(ctx, master, t, [523, 659, 784, 1047]);
   if (name === 'biome') return arpeggio(ctx, master, t, [440, 660, 880]);
+  // Human cues + reward - simple, pleasant, each its own little voice.
+  if (name === 'clap') return arpeggio(ctx, master, t, [660, 880], 0.05, 0.1);
+  if (name === 'whistle') return tone(ctx, master, t, 900, 1500, 0.18, 'sine');
+  if (name === 'point') return tone(ctx, master, t, 700, 990, 0.12, 'triangle');
+  if (name === 'snap') return tone(ctx, master, t, 1320, 880, 0.08, 'triangle');
+  if (name === 'good') return arpeggio(ctx, master, t, [784, 1047, 1319], 0.07, 0.16);
 }
 
 function bark(ctx: AudioContext, dest: AudioNode, t: number): void {
@@ -28,10 +45,18 @@ function bark(ctx: AudioContext, dest: AudioNode, t: number): void {
   o.stop(t + 0.2);
 }
 
-function tone(ctx: AudioContext, dest: AudioNode, t: number, f0: number, f1: number, dur: number): void {
+function tone(
+  ctx: AudioContext,
+  dest: AudioNode,
+  t: number,
+  f0: number,
+  f1: number,
+  dur: number,
+  wave: 'sine' | 'square' | 'sawtooth' | 'triangle' = 'sine',
+): void {
   const o = ctx.createOscillator();
   const g = ctx.createGain();
-  o.type = 'sine';
+  o.type = wave;
   o.frequency.setValueAtTime(f0, t);
   o.frequency.exponentialRampToValueAtTime(f1, t + dur);
   g.gain.setValueAtTime(0.0001, t);
@@ -55,7 +80,13 @@ function noise(ctx: AudioContext, dest: AudioNode, t: number, dur: number): void
   src.start(t);
 }
 
-function arpeggio(ctx: AudioContext, dest: AudioNode, t: number, notes: number[]): void {
-  const step = 0.08;
-  notes.forEach((f, i) => tone(ctx, dest, t + i * step, f, f, 0.18));
+function arpeggio(
+  ctx: AudioContext,
+  dest: AudioNode,
+  t: number,
+  notes: number[],
+  step = 0.08,
+  dur = 0.18,
+): void {
+  notes.forEach((f, i) => tone(ctx, dest, t + i * step, f, f, dur));
 }

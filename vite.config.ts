@@ -27,8 +27,28 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,mp3,ogg}'],
+        // Never serve a stale app. Hashed JS/CSS are immutable so they're safe to
+        // precache; the HTML is deliberately NOT precached and is fetched
+        // network-first, so an online visitor always gets the newest index.html
+        // (and therefore the newest hashed assets). The new SW also takes control
+        // immediately (skipWaiting + clientsClaim) and old caches are purged.
+        globPatterns: ['**/*.{js,css,svg,png,ico,webmanifest,mp3,ogg}'],
+        navigateFallback: null,
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
         runtimeCaching: [
+          {
+            // Always go to the network for the page itself; fall back to cache
+            // only when offline (a stale page is never preferred while online).
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'html-cache',
+              networkTimeoutSeconds: 3,
+              expiration: { maxEntries: 4 },
+            },
+          },
           {
             urlPattern: /\.(?:mp3|ogg|wav)$/i,
             handler: 'CacheFirst',

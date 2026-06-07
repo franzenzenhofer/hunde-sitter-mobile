@@ -146,11 +146,26 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
     reward: (strength) => emit('training:reward', { strength }),
     cue: (id: CueId) => cueGesture(id),
   });
+  // Every human action gets a little voice + a trainer gesture. Feed/Pet/Throw
+  // already make their own sound via the dog events they trigger, so only the
+  // cues and the Good! marker add one here.
+  const ACTION_SFX: Record<string, 'clap' | 'whistle' | 'point' | 'snap' | 'good'> = {
+    clap: 'clap',
+    whistle: 'whistle',
+    point: 'point',
+    snap: 'snap',
+    reward: 'good',
+  };
   const dock = createActionDock(ui, {
     registry: createGameRegistry(),
     context: gameCtx,
     now: () => performance.now(),
     counts: () => ({ ball: bag.count('ball'), treat: bag.count('treat') }),
+    onFire: (id) => {
+      player.gesture();
+      const sfx = ACTION_SFX[id];
+      if (sfx) playSfx(audio, sfx);
+    },
   });
 
   let completedCount = 0;
