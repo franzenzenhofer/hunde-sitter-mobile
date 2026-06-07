@@ -35,7 +35,7 @@ import { createDebugOverlay } from './ui/debug-overlay';
 import { loadBuiltInPrimitives } from './training/registry';
 import { createTrainingEngine } from './training/engine';
 import { seedTricks } from './training/seed-tricks';
-import { createVocabPanel } from './training/vocab-panel';
+import { createMemoryPanel } from './ui/memory-panel';
 import type { WorldContext } from './training/types';
 import { createWllamaEngine } from './ai/llm';
 import { createBelloBrain, type ActionDef, type Situation } from './ai/bello-brain';
@@ -89,9 +89,9 @@ export async function bootGame(stage: HTMLDivElement, ui: HTMLDivElement): Promi
   loadBuiltInPrimitives();
   const engine = createTrainingEngine();
   for (const trick of Object.values(seedTricks())) engine.registerTrick(trick);
-  const vocabPanel = createVocabPanel();
-  ui.appendChild(vocabPanel.el);
-  const refreshVocab = (): void => vocabPanel.update(engine.state.vocabulary, engine.state.tricks);
+  const memoryPanel = createMemoryPanel();
+  ui.appendChild(memoryPanel.el);
+  const refreshVocab = (): void => memoryPanel.update(brain.history, engine.state.tricks);
 
   const worldCtx: WorldContext = {
     dog,
