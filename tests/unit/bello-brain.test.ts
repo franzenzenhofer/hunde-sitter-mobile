@@ -84,6 +84,25 @@ describe('createBelloBrain', () => {
       });
   });
 
+  it('never offers the same trick twice in a row (variety with a tiny model)', async () => {
+    const offered: string[][] = [];
+    const engine: LlmEngine = {
+      load: vi.fn(async () => undefined),
+      isReady: () => true,
+      choose: async ({ actions }) => {
+        offered.push(actions);
+        return { action: actions[0]!, thought: '' };
+      },
+    };
+    const brain = createBelloBrain(engine);
+    const sit = { cue: 'clap', situation: { playerNear: true, ballVisible: false }, actions: ACTIONS };
+    await brain.decide(sit); // picks 'sit'
+    await brain.decide(sit); // must NOT be allowed to pick 'sit' again
+    expect(offered[0]).toEqual(['sit', 'spin', 'bark']);
+    expect(offered[1]).not.toContain('sit');
+    expect(brain.history[1]!.action).not.toBe('sit');
+  });
+
   it('passes the persona + allowed actions to the model', async () => {
     const spy = vi.fn();
     const brain = createBelloBrain(fakeEngine({ action: 'sit', thought: '' }, spy));

@@ -53,9 +53,15 @@ export function createBelloBrain(engine: LlmEngine): BelloBrain {
     history,
     lastThought: '',
     decide: async ({ cue, situation, actions }) => {
-      const system = `${PERSONA}\nAllowed actions: ${actions.map((a) => `${a.id} (${a.name})`).join(', ')}.`;
-      const user = buildUserPrompt(cue, situation, history, actions);
-      const choice = await engine.choose({ system, user, actions: actions.map((a) => a.id) });
+      // Don't let Bello repeat his last trick back-to-back - with a tiny model
+      // that keeps play varied and fun. Falls back to the full set if excluding
+      // would leave nothing.
+      const lastAction = history[history.length - 1]?.action;
+      const available = actions.filter((a) => a.id !== lastAction);
+      const choices = available.length ? available : actions;
+      const system = `${PERSONA}\nAllowed actions: ${choices.map((a) => `${a.id} (${a.name})`).join(', ')}.`;
+      const user = buildUserPrompt(cue, situation, history, choices);
+      const choice = await engine.choose({ system, user, actions: choices.map((a) => a.id) });
       history.push({ cue, situation: describeSituation(situation), action: choice.action, reward: 0 });
       if (history.length > MEMORY_LIMIT) history.splice(0, history.length - MEMORY_LIMIT);
       brain.lastThought = choice.thought;
